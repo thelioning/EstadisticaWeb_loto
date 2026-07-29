@@ -82,3 +82,20 @@ export const predictionCandidates = sqliteTable(
     uniqueIndex("prediction_candidates_rank_unique").on(table.predictionId, table.ranking),
   ],
 );
+
+export const syncRuns = sqliteTable(
+  "sync_runs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    source: text("source").notNull(),
+    dateFrom: text("date_from").notNull(),
+    dateTo: text("date_to").notNull(),
+    status: text("status").notNull(),
+    recordsCreated: integer("records_created").notNull().default(0),
+    recordsUpdated: integer("records_updated").notNull().default(0),
+    errorMessage: text("error_message"),
+    startedAt: text("started_at").notNull(),
+    finishedAt: text("finished_at"),
+  },
+  (table) => [index("sync_runs_started_idx").on(table.startedAt)],
+);
