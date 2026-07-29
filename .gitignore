@@ -1,0 +1,34 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# generated builds
+/.next/
+/.vinext/
+/out/
+/dist/
+/.wrangler/
+
+# local and temporary files
+.DS_Store
+*.pem
+.dev-stdout.log
+.dev-stderr.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.env*
+.vercel
+next-env.d.ts
+/outputs/
+/work/
