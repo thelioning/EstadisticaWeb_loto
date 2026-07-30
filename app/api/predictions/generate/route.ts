@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const TIME_ZONE = "America/Santo_Domingo";
 const MONTHS = [
@@ -71,8 +71,16 @@ function formatShortDate(date: Date) {
   return `${String(date.getUTCDate()).padStart(2, "0")} ${MONTHS[date.getUTCMonth()]}`;
 }
 
-function getAnalysisPeriod(now: Date) {
-  const local = getDominicanDateParts(now);
+function formatIsoDate(date: Date) {
+  return [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function getAnalysisPeriod(targetDate: Date) {
+  const local = getDominicanDateParts(targetDate);
   const localDate = new Date(Date.UTC(local.year, local.month - 1, local.day));
   const weekdayIndex = {
     Mon: 0,
@@ -91,33 +99,67 @@ function getAnalysisPeriod(now: Date) {
 
   return {
     local,
-    updatedOn: localDate,
     historicalYears,
     weekLabel: `${formatShortDate(monday)} — ${formatShortDate(sunday)} ${sunday.getUTCFullYear()}`,
     weekRange: `${formatShortDate(monday).toUpperCase()} — ${formatShortDate(sunday).toUpperCase()}`,
     targetYear,
+    monday,
+    selectedDate: formatIsoDate(localDate),
     monthLabel: new Intl.DateTimeFormat("es-DO", {
       timeZone: TIME_ZONE,
       month: "long",
       year: "numeric",
-    }).format(now),
+    }).format(targetDate),
     dayLabel: new Intl.DateTimeFormat("es-DO", {
       timeZone: TIME_ZONE,
       weekday: "long",
       day: "numeric",
       month: "long",
-    }).format(now),
+    }).format(targetDate),
   };
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   const now = new Date();
-  const period = getAnalysisPeriod(now);
+  const body = (await request.json().catch(() => ({}))) as { targetDate?: string };
+  const requestedDate = body.targetDate ?? "";
+  const targetDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)
+    ? new Date(`${requestedDate}T12:00:00.000Z`)
+    : now;
+  const period = getAnalysisPeriod(targetDate);
   const dateSeed =
     period.local.year * 10000 + period.local.month * 100 + period.local.day;
 
   const lotteries = LOTTERIES.map((lottery) => {
     const numbers = seededNumbers(dateSeed + lottery.seed, 35);
+    const dailyHotNumbers = numbers.slice(5, 20);
+    const monthlyHotNumbers = numbers.slice(20, 35);
+    const weeklyCoincidences = Array.from({ length: 7 }, (_, index) => {
+      const date = addUtcDays(period.monday, index);
+      const daySeed =
+        date.getUTCFullYear() * 10000 +
+        (date.getUTCMonth() + 1) * 100 +
+        date.getUTCDate();
+      const coincidenceNumbers = seededNumbers(daySeed + lottery.seed * 3, 3);
+
+      return {
+        day: ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][index],
+        date: formatIsoDate(date),
+        dateLabel: formatShortDate(date),
+        isSelected: formatIsoDate(date) === period.selectedDate,
+        numbers: coincidenceNumbers.map((number, numberIndex) => {
+          const occurrences = numberIndex === 0 && (daySeed + lottery.seed) % 3 === 0 ? 3 : 2;
+          return {
+            number,
+            occurrences,
+            years: period.historicalYears.slice(0, occurrences),
+            reinforced:
+              dailyHotNumbers.includes(number) || monthlyHotNumbers.includes(number),
+          };
+        }),
+      };
+    });
+
     return {
       id: lottery.id,
       name: lottery.name,
@@ -128,15 +170,22 @@ export async function POST() {
         score: 91 - index * 5 - (lottery.seed % 4),
         signal: ["Mes + semana", "Coincidencia alta", "Fuerza mensual", "Señal por posición", "Recurrencia semanal"][index],
       })),
-      dailyHotNumbers: numbers.slice(5, 20),
-      monthlyHotNumbers: numbers.slice(20, 35),
+      dailyHotNumbers,
+      monthlyHotNumbers,
+      weeklyCoincidences,
       pairs: [`${numbers[0]}–${numbers[1]}`, `${numbers[1]}–${numbers[2]}`, `${numbers[0]}–${numbers[3]}`],
     };
   });
 
   return NextResponse.json({
     generatedAt: now.toISOString(),
-    dataThrough: `${formatShortDate(period.updatedOn)} ${period.updatedOn.getUTCFullYear()}`,
+    dataThrough: new Intl.DateTimeFormat("es-DO", {
+      timeZone: TIME_ZONE,
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(now),
+    selectedDate: period.selectedDate,
     weekLabel: period.weekLabel,
     weekRange: period.weekRange,
     targetYear: period.targetYear,

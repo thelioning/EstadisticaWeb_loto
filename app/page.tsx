@@ -10,11 +10,24 @@ type LotteryPrediction = {
   candidates: Array<{ number: string; score: number; signal: string }>;
   dailyHotNumbers: string[];
   monthlyHotNumbers: string[];
+  weeklyCoincidences: Array<{
+    day: string;
+    date: string;
+    dateLabel: string;
+    isSelected: boolean;
+    numbers: Array<{
+      number: string;
+      occurrences: number;
+      years: number[];
+      reinforced: boolean;
+    }>;
+  }>;
   pairs: string[];
 };
 
 type PredictionResponse = {
   generatedAt: string;
+  selectedDate: string;
   dataThrough: string;
   weekLabel: string;
   weekRange: string;
@@ -36,11 +49,24 @@ function Ball({ value, size = "normal" }: { value: string; size?: "normal" | "sm
   return <span className={`ball ${size === "small" ? "ballSmall" : ""}`}>{value}</span>;
 }
 
+function currentDominicanDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Santo_Domingo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
 export default function Home() {
   const [result, setResult] = useState<PredictionResponse | null>(null);
   const [activeTab, setActiveTab] = useState("all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedDate, setSelectedDate] = useState(currentDominicanDate);
   const initialRefreshStarted = useRef(false);
 
   const visibleLotteries = useMemo(() => {
@@ -50,19 +76,7 @@ export default function Home() {
       : result.lotteries.filter((lottery) => lottery.id === activeTab);
   }, [activeTab, result]);
 
-  function currentDominicanDate() {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/Santo_Domingo",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(new Date());
-    const value = (type: Intl.DateTimeFormatPartTypes) =>
-      parts.find((part) => part.type === type)?.value ?? "";
-    return `${value("year")}-${value("month")}-${value("day")}`;
-  }
-
-  async function generatePredictions() {
+  async function generatePredictions(date = selectedDate) {
     setLoading(true);
     setError("");
     try {
@@ -71,10 +85,14 @@ export default function Home() {
       await fetch("/api/admin/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: currentDominicanDate() }),
+        body: JSON.stringify({ date }),
       }).catch(() => null);
 
-      const response = await fetch("/api/predictions/generate", { method: "POST" });
+      const response = await fetch("/api/predictions/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetDate: date }),
+      });
       if (!response.ok) throw new Error("No fue posible generar el análisis.");
       setResult((await response.json()) as PredictionResponse);
     } catch (caught) {
@@ -87,7 +105,7 @@ export default function Home() {
   useEffect(() => {
     if (initialRefreshStarted.current) return;
     initialRefreshStarted.current = true;
-    void generatePredictions();
+    void generatePredictions(currentDominicanDate());
   }, []);
 
   function clearScreen() {
@@ -120,7 +138,7 @@ export default function Home() {
             lunes a domingo para descubrir las señales estadísticas vigentes.
           </p>
           <div className="heroActions">
-            <button className="primaryButton" onClick={generatePredictions} disabled={loading}>
+            <button className="primaryButton" onClick={() => void generatePredictions(selectedDate)} disabled={loading}>
               <span className="spark">✦</span>
               {loading ? "Actualizando…" : "Actualizar análisis"}
             </button>
@@ -162,6 +180,31 @@ export default function Home() {
           </nav>
         </div>
 
+        <form
+          className="calendarBar"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void generatePredictions(selectedDate);
+          }}
+        >
+          <div>
+            <label htmlFor="analysis-date">Calendario de coincidencias</label>
+            <p>Elige una fecha para consultar su semana completa y sus coincidencias históricas.</p>
+          </div>
+          <div className="calendarControls">
+            <input
+              id="analysis-date"
+              type="date"
+              value={selectedDate}
+              onChange={(event) => setSelectedDate(event.target.value)}
+              required
+            />
+            <button type="submit" disabled={loading || !selectedDate}>
+              {loading ? "Consultando…" : "Consultar fecha"}
+            </button>
+          </div>
+        </form>
+
         {!result && !loading && !error && (
           <div className="emptyState">
             <div className="orbit">
@@ -192,6 +235,48 @@ export default function Home() {
               <span><b>{result.dayLabel}</b> Análisis del día</span>
               <span><b>{result.monthLabel}</b> Análisis del mes</span>
             </div>
+
+            <section className="coincidenceBoard" aria-labelledby="coincidence-title">
+              <div className="coincidenceHeader">
+                <div>
+                  <span className="sectionKicker">SEGUIMIENTO SEMANAL</span>
+                  <h3 id="coincidence-title">Coincidencias por día</h3>
+                </div>
+                <span className="prototypeBadge">Piloto demostrativo</span>
+              </div>
+              <p className="coincidenceIntro">
+                Cada número indica cuántos de los tres años históricos coincidieron.
+                La estrella señala una coincidencia reforzada por los calientes del día o del mes.
+              </p>
+
+              {visibleLotteries.map((lottery) => (
+                <div className="lotteryWeek" key={`${lottery.id}-week`}>
+                  <div className="lotteryWeekTitle" style={{ "--accent": lottery.accent } as React.CSSProperties}>
+                    <span>{lottery.shortName}</span>
+                    <b>{result.historicalYears.join(" · ")}</b>
+                  </div>
+                  <div className="weekDays">
+                    {lottery.weeklyCoincidences.map((day) => (
+                      <article className={`dayTile ${day.isSelected ? "selectedDay" : ""}`} key={day.date}>
+                        <div className="dayTileHeader">
+                          <strong>{day.day}</strong>
+                          <span>{day.dateLabel}</span>
+                        </div>
+                        <div className="coincidenceNumbers">
+                          {day.numbers.map((item) => (
+                            <div className="coincidenceNumber" key={item.number}>
+                              <Ball value={item.number} size="small" />
+                              <span>{item.occurrences}/3 {item.reinforced ? "★" : ""}</span>
+                              <small>{item.years.join(" · ")}</small>
+                            </div>
+                          ))}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </section>
 
             <div className="lotteryGrid">
               {visibleLotteries.map((lottery) => (
