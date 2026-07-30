@@ -8,7 +8,8 @@ type LotteryPrediction = {
   shortName: string;
   accent: string;
   candidates: Array<{ number: string; score: number; signal: string }>;
-  hotNumbers: string[];
+  dailyHotNumbers: string[];
+  monthlyHotNumbers: string[];
   pairs: string[];
 };
 
@@ -16,6 +17,10 @@ type PredictionResponse = {
   generatedAt: string;
   dataThrough: string;
   weekLabel: string;
+  weekRange: string;
+  targetYear: number;
+  monthLabel: string;
+  dayLabel: string;
   historicalYears: number[];
   lotteries: LotteryPrediction[];
 };
@@ -84,8 +89,8 @@ export default function Home() {
           <div className="eyebrow">ANÁLISIS HISTÓRICO · REPÚBLICA DOMINICANA</div>
           <h1>Decisiones con datos.<br /><span>Predicciones con contexto.</span></h1>
           <p className="heroCopy">
-            Compara los sorteos equivalentes de 2023, 2024 y 2025 para descubrir
-            las señales estadísticas de la semana activa.
+            Compara los tres años anteriores por día, por mes y por semanas de
+            lunes a sábado para descubrir las señales estadísticas vigentes.
           </p>
           <div className="heroActions">
             <button className="primaryButton" onClick={generatePredictions} disabled={loading}>
@@ -101,12 +106,12 @@ export default function Home() {
 
         <aside className="weekCard">
           <span className="weekLabel">SEMANA OBJETIVO</span>
-          <strong>27 JUL — 01 AGO</strong>
-          <span className="weekYear">2026</span>
+          <strong>{result?.weekRange ?? "LUNES — SÁBADO"}</strong>
+          <span className="weekYear">{result?.targetYear ?? new Date().getFullYear()}</span>
           <div className="weekDivider" />
           <div className="yearsRow">
             <span>BASE HISTÓRICA</span>
-            <b>2023 · 2024 · 2025</b>
+            <b>{result?.historicalYears.join(" · ") ?? "3 años anteriores"}</b>
           </div>
         </aside>
       </section>
@@ -154,9 +159,11 @@ export default function Home() {
         {result && (
           <>
             <div className="summaryStrip">
-              <span><b>{result.weekLabel}</b> Semana analizada</span>
+              <span><b>{result.weekLabel}</b> Semana de lunes a sábado</span>
               <span><b>{result.dataThrough}</b> Datos disponibles hasta</span>
-              <span><b>{result.historicalYears.join(" · ")}</b> Base histórica</span>
+              <span><b>{result.historicalYears.join(" · ")}</b> Base histórica móvil</span>
+              <span><b>{result.dayLabel}</b> Análisis del día</span>
+              <span><b>{result.monthLabel}</b> Análisis del mes</span>
             </div>
 
             <div className="lotteryGrid">
@@ -194,11 +201,21 @@ export default function Home() {
 
                   <div className="cardSection hotSection">
                     <div className="sectionTitle">
-                      <span>15 calientes del mes</span>
-                      <small>2023—2025</small>
+                      <span>15 calientes del día</span>
+                      <small>{result.dayLabel}</small>
                     </div>
                     <div className="ballCloud">
-                      {lottery.hotNumbers.map((number) => <Ball key={number} value={number} size="small" />)}
+                      {lottery.dailyHotNumbers.map((number) => <Ball key={number} value={number} size="small" />)}
+                    </div>
+                  </div>
+
+                  <div className="cardSection monthHotSection">
+                    <div className="sectionTitle">
+                      <span>15 calientes del mes</span>
+                      <small>{result.historicalYears.join("—")}</small>
+                    </div>
+                    <div className="ballCloud">
+                      {lottery.monthlyHotNumbers.map((number) => <Ball key={number} value={number} size="small" />)}
                     </div>
                   </div>
 
