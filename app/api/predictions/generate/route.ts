@@ -84,19 +84,17 @@ function getAnalysisPeriod(now: Date) {
     Sun: 6,
   }[local.weekday] ?? 0;
 
-  // El domingo presenta la semana que comienza al día siguiente.
-  const monday = addUtcDays(localDate, local.weekday === "Sun" ? 1 : -weekdayIndex);
-  const saturday = addUtcDays(monday, 5);
-  const dataThrough = addUtcDays(localDate, -1);
-  const targetYear = saturday.getUTCFullYear();
+  const monday = addUtcDays(localDate, -weekdayIndex);
+  const sunday = addUtcDays(monday, 6);
+  const targetYear = sunday.getUTCFullYear();
   const historicalYears = [targetYear - 3, targetYear - 2, targetYear - 1];
 
   return {
     local,
-    dataThrough,
+    updatedOn: localDate,
     historicalYears,
-    weekLabel: `${formatShortDate(monday)} — ${formatShortDate(saturday)} ${saturday.getUTCFullYear()}`,
-    weekRange: `${formatShortDate(monday).toUpperCase()} — ${formatShortDate(saturday).toUpperCase()}`,
+    weekLabel: `${formatShortDate(monday)} — ${formatShortDate(sunday)} ${sunday.getUTCFullYear()}`,
+    weekRange: `${formatShortDate(monday).toUpperCase()} — ${formatShortDate(sunday).toUpperCase()}`,
     targetYear,
     monthLabel: new Intl.DateTimeFormat("es-DO", {
       timeZone: TIME_ZONE,
@@ -138,7 +136,7 @@ export async function POST() {
 
   return NextResponse.json({
     generatedAt: now.toISOString(),
-    dataThrough: `${formatShortDate(period.dataThrough)} ${period.dataThrough.getUTCFullYear()}`,
+    dataThrough: `${formatShortDate(period.updatedOn)} ${period.updatedOn.getUTCFullYear()}`,
     weekLabel: period.weekLabel,
     weekRange: period.weekRange,
     targetYear: period.targetYear,

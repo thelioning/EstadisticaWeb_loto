@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type LotteryPrediction = {
   id: string;
@@ -41,6 +41,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const initialRefreshStarted = useRef(false);
 
   const visibleLotteries = useMemo(() => {
     if (!result) return [];
@@ -49,10 +50,30 @@ export default function Home() {
       : result.lotteries.filter((lottery) => lottery.id === activeTab);
   }, [activeTab, result]);
 
+  function currentDominicanDate() {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Santo_Domingo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
+    const value = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((part) => part.type === type)?.value ?? "";
+    return `${value("year")}-${value("month")}-${value("day")}`;
+  }
+
   async function generatePredictions() {
     setLoading(true);
     setError("");
     try {
+      // La sincronización actualiza la base disponible. Si la fuente todavía no
+      // publicó el sorteo, el análisis puede continuar con el último dato válido.
+      await fetch("/api/admin/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: currentDominicanDate() }),
+      }).catch(() => null);
+
       const response = await fetch("/api/predictions/generate", { method: "POST" });
       if (!response.ok) throw new Error("No fue posible generar el análisis.");
       setResult((await response.json()) as PredictionResponse);
@@ -62,6 +83,12 @@ export default function Home() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (initialRefreshStarted.current) return;
+    initialRefreshStarted.current = true;
+    void generatePredictions();
+  }, []);
 
   function clearScreen() {
     setResult(null);
@@ -90,12 +117,12 @@ export default function Home() {
           <h1>Decisiones con datos.<br /><span>Predicciones con contexto.</span></h1>
           <p className="heroCopy">
             Compara los tres años anteriores por día, por mes y por semanas de
-            lunes a sábado para descubrir las señales estadísticas vigentes.
+            lunes a domingo para descubrir las señales estadísticas vigentes.
           </p>
           <div className="heroActions">
             <button className="primaryButton" onClick={generatePredictions} disabled={loading}>
               <span className="spark">✦</span>
-              {loading ? "Analizando…" : "Generar predicciones"}
+              {loading ? "Actualizando…" : "Actualizar análisis"}
             </button>
             <button className="secondaryButton" onClick={clearScreen} disabled={!result && !error}>
               Limpiar pantalla
@@ -106,7 +133,7 @@ export default function Home() {
 
         <aside className="weekCard">
           <span className="weekLabel">SEMANA OBJETIVO</span>
-          <strong>{result?.weekRange ?? "LUNES — SÁBADO"}</strong>
+          <strong>{result?.weekRange ?? "LUNES — DOMINGO"}</strong>
           <span className="weekYear">{result?.targetYear ?? new Date().getFullYear()}</span>
           <div className="weekDivider" />
           <div className="yearsRow">
@@ -159,8 +186,8 @@ export default function Home() {
         {result && (
           <>
             <div className="summaryStrip">
-              <span><b>{result.weekLabel}</b> Semana de lunes a sábado</span>
-              <span><b>{result.dataThrough}</b> Datos disponibles hasta</span>
+              <span><b>{result.weekLabel}</b> Semana de lunes a domingo</span>
+              <span><b>{result.dataThrough}</b> Actualizado el</span>
               <span><b>{result.historicalYears.join(" · ")}</b> Base histórica móvil</span>
               <span><b>{result.dayLabel}</b> Análisis del día</span>
               <span><b>{result.monthLabel}</b> Análisis del mes</span>
