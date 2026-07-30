@@ -23,6 +23,8 @@ type LotteryPrediction = {
     }>;
   }>;
   pairs: string[];
+  historicalDrawCount: number;
+  hasSufficientData: boolean;
 };
 
 type PredictionResponse = {
@@ -35,6 +37,9 @@ type PredictionResponse = {
   monthLabel: string;
   dayLabel: string;
   historicalYears: number[];
+  dataStatus: "complete" | "insufficient";
+  dataStatusLabel: string;
+  historicalDrawCount: number;
   lotteries: LotteryPrediction[];
 };
 
@@ -230,10 +235,18 @@ export default function Home() {
           <>
             <div className="summaryStrip">
               <span><b>{result.weekLabel}</b> Semana de lunes a domingo</span>
-              <span><b>{result.dataThrough}</b> Actualizado el</span>
+              <span><b>{result.dataThrough}</b> Último resultado confirmado</span>
               <span><b>{result.historicalYears.join(" · ")}</b> Base histórica móvil</span>
               <span><b>{result.dayLabel}</b> Análisis del día</span>
               <span><b>{result.monthLabel}</b> Análisis del mes</span>
+            </div>
+
+            <div className={`dataNotice ${result.dataStatus === "complete" ? "dataComplete" : "dataInsufficient"}`}>
+              <div>
+                <strong>{result.dataStatusLabel}</strong>
+                <span>{result.historicalDrawCount} sorteos históricos verificados en la base de datos.</span>
+              </div>
+              <b>{result.dataStatus === "complete" ? "DATOS REALES" : "SIN SIMULACIÓN"}</b>
             </div>
 
             <section className="coincidenceBoard" aria-labelledby="coincidence-title">
@@ -242,7 +255,9 @@ export default function Home() {
                   <span className="sectionKicker">SEGUIMIENTO SEMANAL</span>
                   <h3 id="coincidence-title">Coincidencias por día</h3>
                 </div>
-                <span className="prototypeBadge">Piloto demostrativo</span>
+                <span className="prototypeBadge">
+                  {result.dataStatus === "complete" ? "Datos reales" : "Datos insuficientes"}
+                </span>
               </div>
               <p className="coincidenceIntro">
                 Cada número indica cuántos de los tres años históricos coincidieron.
@@ -270,6 +285,9 @@ export default function Home() {
                               <small>{item.years.join(" · ")}</small>
                             </div>
                           ))}
+                          {day.numbers.length === 0 && (
+                            <span className="noVerifiedData">Sin coincidencias verificadas</span>
+                          )}
                         </div>
                       </article>
                     ))}
@@ -308,6 +326,9 @@ export default function Home() {
                           </div>
                         </div>
                       ))}
+                      {lottery.candidates.length === 0 && (
+                        <p className="noCardData">No hay suficientes resultados reales para calcular candidatos.</p>
+                      )}
                     </div>
                   </div>
 
@@ -318,6 +339,9 @@ export default function Home() {
                     </div>
                     <div className="ballCloud">
                       {lottery.dailyHotNumbers.map((number) => <Ball key={number} value={number} size="small" />)}
+                      {lottery.dailyHotNumbers.length === 0 && (
+                        <span className="noCardData">Sin datos históricos suficientes para este día.</span>
+                      )}
                     </div>
                   </div>
 
@@ -328,12 +352,16 @@ export default function Home() {
                     </div>
                     <div className="ballCloud">
                       {lottery.monthlyHotNumbers.map((number) => <Ball key={number} value={number} size="small" />)}
+                      {lottery.monthlyHotNumbers.length === 0 && (
+                        <span className="noCardData">Sin datos históricos suficientes para este mes.</span>
+                      )}
                     </div>
                   </div>
 
                   <div className="pairRow">
                     <span>Parejas recurrentes</span>
                     <div>{lottery.pairs.map((pair) => <b key={pair}>{pair}</b>)}</div>
+                    {lottery.pairs.length === 0 && <small>Sin parejas recurrentes verificadas.</small>}
                   </div>
                 </article>
               ))}

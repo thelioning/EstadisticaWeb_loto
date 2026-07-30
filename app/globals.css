@@ -314,6 +314,23 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 .summaryStrip span { padding: 14px 17px; background: rgba(255,255,255,.65); color: var(--muted); font-size: 11px; display: flex; flex-direction: column; gap: 4px; }
 .summaryStrip b { color: var(--ink); font-size: 13px; }
 
+.dataNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+  padding: 15px 18px;
+  border: 1px solid;
+  border-radius: 14px;
+}
+.dataNotice div { display: flex; flex-direction: column; gap: 3px; }
+.dataNotice strong { font-size: 12px; }
+.dataNotice span { font-size: 10px; opacity: .72; }
+.dataNotice > b { font-size: 9px; letter-spacing: .09em; white-space: nowrap; }
+.dataComplete { color: #07563f; border-color: #acd8c8; background: #edf9f4; }
+.dataInsufficient { color: #81520a; border-color: #e7ca8d; background: #fff8e8; }
+
 .coincidenceBoard {
   margin-bottom: 22px;
   padding: 24px;
@@ -349,6 +366,8 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 .coincidenceNumber { display: grid; grid-template-columns: 34px 1fr; align-items: center; column-gap: 7px; }
 .coincidenceNumber > span { color: var(--green); font-size: 10px; font-weight: 750; }
 .coincidenceNumber small { grid-column: 2; color: var(--muted); font-size: 8px; }
+.noVerifiedData { color: var(--muted); font-size: 9px; line-height: 1.4; }
+.noCardData { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 
 .lotteryGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 .lotteryCard {
@@ -391,6 +410,7 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 .pairRow > span { display: block; margin-bottom: 10px; text-transform: uppercase; letter-spacing: .08em; }
 .pairRow div { display: flex; gap: 7px; flex-wrap: wrap; }
 .pairRow b { padding: 7px 10px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 8%, white); color: var(--accent); }
+.pairRow small { color: var(--muted); font-size: 9px; }
 .generatedAt { text-align: right; color: var(--muted); font-size: 10px; margin-top: 14px; }
 
 @media (max-width: 1050px) {
@@ -407,6 +427,7 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   .workspace { padding: 40px 15px 70px; }
   .workspaceHeader { align-items: flex-start; flex-direction: column; }
   .calendarBar { align-items: stretch; flex-direction: column; }
+  .dataNotice { align-items: flex-start; flex-direction: column; }
   .calendarControls { width: 100%; }
   .calendarControls input, .calendarControls button { flex: 1; min-width: 0; }
   .tabs { width: 100%; overflow-x: auto; }

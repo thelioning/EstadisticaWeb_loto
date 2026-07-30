@@ -1,74 +1,33 @@
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import { getDb } from "../../../../db";
+import { drawResults, lotteries } from "../../../../db/schema";
 
 const TIME_ZONE = "America/Santo_Domingo";
 const MONTHS = [
   "ene", "feb", "mar", "abr", "may", "jun",
   "jul", "ago", "sep", "oct", "nov", "dic",
 ];
+const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+const LOTTERY_META: Record<string, { shortName: string; accent: string }> = {
+  nacional: { shortName: "LOTERÍA NACIONAL", accent: "#1a5e9a" },
+  leidsa: { shortName: "LEIDSA", accent: "#0b6a4f" },
+  loteka: { shortName: "LOTEKA", accent: "#9a4e20" },
+};
 
-const LOTTERIES = [
-  {
-    id: "nacional",
-    name: "Quiniela Nacional",
-    shortName: "LOTERÍA NACIONAL",
-    accent: "#1a5e9a",
-    seed: 17,
-  },
-  {
-    id: "leidsa",
-    name: "Quiniela Palé Leidsa",
-    shortName: "LEIDSA",
-    accent: "#0b6a4f",
-    seed: 41,
-  },
-  {
-    id: "loteka",
-    name: "Quiniela Palé Loteka",
-    shortName: "LOTEKA",
-    accent: "#9a4e20",
-    seed: 73,
-  },
-];
-
-function seededNumbers(seed: number, count: number) {
-  const values: string[] = [];
-  let state = seed;
-  while (values.length < count) {
-    state = (state * 73 + 41) % 1009;
-    const value = String(state % 100).padStart(2, "0");
-    if (!values.includes(value)) values.push(value);
-  }
-  return values;
-}
-
-function getDominicanDateParts(date: Date) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "short",
-  }).formatToParts(date);
-
-  const value = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? "";
-
-  return {
-    year: Number(value("year")),
-    month: Number(value("month")),
-    day: Number(value("day")),
-    weekday: value("weekday"),
-  };
-}
+type Draw = {
+  drawDate: string;
+  year: number;
+  month: number;
+  firstNumber: string;
+  secondNumber: string;
+  thirdNumber: string;
+};
 
 function addUtcDays(date: Date, days: number) {
   const result = new Date(date);
   result.setUTCDate(result.getUTCDate() + days);
   return result;
-}
-
-function formatShortDate(date: Date) {
-  return `${String(date.getUTCDate()).padStart(2, "0")} ${MONTHS[date.getUTCMonth()]}`;
 }
 
 function formatIsoDate(date: Date) {
@@ -79,120 +38,246 @@ function formatIsoDate(date: Date) {
   ].join("-");
 }
 
-function getAnalysisPeriod(targetDate: Date) {
-  const local = getDominicanDateParts(targetDate);
-  const localDate = new Date(Date.UTC(local.year, local.month - 1, local.day));
-  const weekdayIndex = {
-    Mon: 0,
-    Tue: 1,
-    Wed: 2,
-    Thu: 3,
-    Fri: 4,
-    Sat: 5,
-    Sun: 6,
-  }[local.weekday] ?? 0;
+function formatShortDate(date: Date) {
+  return `${String(date.getUTCDate()).padStart(2, "0")} ${MONTHS[date.getUTCMonth()]}`;
+}
 
-  const monday = addUtcDays(localDate, -weekdayIndex);
+function parseTargetDate(requestedDate: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
+    return new Date(`${requestedDate}T12:00:00.000Z`);
+  }
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return new Date(`${value("year")}-${value("month")}-${value("day")}T12:00:00.000Z`);
+}
+
+function analysisPeriod(targetDate: Date) {
+  const weekdayIndex = (targetDate.getUTCDay() + 6) % 7;
+  const monday = addUtcDays(targetDate, -weekdayIndex);
   const sunday = addUtcDays(monday, 6);
-  const targetYear = sunday.getUTCFullYear();
-  const historicalYears = [targetYear - 3, targetYear - 2, targetYear - 1];
-
+  const targetYear = targetDate.getUTCFullYear();
   return {
-    local,
-    historicalYears,
-    weekLabel: `${formatShortDate(monday)} — ${formatShortDate(sunday)} ${sunday.getUTCFullYear()}`,
-    weekRange: `${formatShortDate(monday).toUpperCase()} — ${formatShortDate(sunday).toUpperCase()}`,
-    targetYear,
     monday,
-    selectedDate: formatIsoDate(localDate),
-    monthLabel: new Intl.DateTimeFormat("es-DO", {
-      timeZone: TIME_ZONE,
-      month: "long",
-      year: "numeric",
-    }).format(targetDate),
-    dayLabel: new Intl.DateTimeFormat("es-DO", {
-      timeZone: TIME_ZONE,
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-    }).format(targetDate),
+    sunday,
+    targetYear,
+    selectedDate: formatIsoDate(targetDate),
+    historicalYears: [targetYear - 3, targetYear - 2, targetYear - 1],
   };
 }
 
+function drawNumbers(draw: Draw) {
+  return [draw.firstNumber, draw.secondNumber, draw.thirdNumber];
+}
+
+function rankedNumbers(draws: Draw[], limit = 15) {
+  const counts = new Map<string, number>();
+  for (const draw of draws) {
+    for (const number of drawNumbers(draw)) {
+      counts.set(number, (counts.get(number) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([number]) => number);
+}
+
+function recurrentPairs(draws: Draw[], limit = 3) {
+  const counts = new Map<string, number>();
+  for (const draw of draws) {
+    const numbers = [...new Set(drawNumbers(draw))].sort();
+    for (let left = 0; left < numbers.length; left += 1) {
+      for (let right = left + 1; right < numbers.length; right += 1) {
+        const pair = `${numbers[left]}–${numbers[right]}`;
+        counts.set(pair, (counts.get(pair) ?? 0) + 1);
+      }
+    }
+  }
+  return [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([pair]) => pair);
+}
+
+function coincidencesForDate(
+  date: Date,
+  draws: Draw[],
+  historicalYears: number[],
+  dailyHotNumbers: string[],
+  monthlyHotNumbers: string[],
+) {
+  const month = date.getUTCMonth() + 1;
+  const day = date.getUTCDate();
+  const yearsByNumber = new Map<string, Set<number>>();
+
+  for (const draw of draws) {
+    const drawDay = Number(draw.drawDate.slice(8, 10));
+    if (draw.month !== month || drawDay !== day) continue;
+    for (const number of new Set(drawNumbers(draw))) {
+      const years = yearsByNumber.get(number) ?? new Set<number>();
+      years.add(draw.year);
+      yearsByNumber.set(number, years);
+    }
+  }
+
+  return [...yearsByNumber.entries()]
+    .map(([number, years]) => ({
+      number,
+      years: [...years].sort(),
+      occurrences: years.size,
+      reinforced:
+        dailyHotNumbers.includes(number) || monthlyHotNumbers.includes(number),
+    }))
+    .filter((item) => item.occurrences >= 2)
+    .sort((a, b) => b.occurrences - a.occurrences || a.number.localeCompare(b.number))
+    .slice(0, 8)
+    .map((item) => ({
+      ...item,
+      years: item.years.filter((year) => historicalYears.includes(year)),
+    }));
+}
+
 export async function POST(request: NextRequest) {
-  const now = new Date();
-  const body = (await request.json().catch(() => ({}))) as { targetDate?: string };
-  const requestedDate = body.targetDate ?? "";
-  const targetDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)
-    ? new Date(`${requestedDate}T12:00:00.000Z`)
-    : now;
-  const period = getAnalysisPeriod(targetDate);
-  const dateSeed =
-    period.local.year * 10000 + period.local.month * 100 + period.local.day;
+  try {
+    const body = (await request.json().catch(() => ({}))) as { targetDate?: string };
+    const targetDate = parseTargetDate(body.targetDate ?? "");
+    const period = analysisPeriod(targetDate);
+    const targetMonth = targetDate.getUTCMonth() + 1;
+    const targetDay = targetDate.getUTCDate();
+    const db = getDb();
 
-  const lotteries = LOTTERIES.map((lottery) => {
-    const numbers = seededNumbers(dateSeed + lottery.seed, 35);
-    const dailyHotNumbers = numbers.slice(5, 20);
-    const monthlyHotNumbers = numbers.slice(20, 35);
-    const weeklyCoincidences = Array.from({ length: 7 }, (_, index) => {
-      const date = addUtcDays(period.monday, index);
-      const daySeed =
-        date.getUTCFullYear() * 10000 +
-        (date.getUTCMonth() + 1) * 100 +
-        date.getUTCDate();
-      const coincidenceNumbers = seededNumbers(daySeed + lottery.seed * 3, 3);
+    const lotteryRows = await db
+      .select()
+      .from(lotteries)
+      .where(inArray(lotteries.slug, ["nacional", "leidsa", "loteka"]))
+      .orderBy(asc(lotteries.id));
 
-      return {
-        day: ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][index],
-        date: formatIsoDate(date),
-        dateLabel: formatShortDate(date),
-        isSelected: formatIsoDate(date) === period.selectedDate,
-        numbers: coincidenceNumbers.map((number, numberIndex) => {
-          const occurrences = numberIndex === 0 && (daySeed + lottery.seed) % 3 === 0 ? 3 : 2;
-          return {
-            number,
-            occurrences,
-            years: period.historicalYears.slice(0, occurrences),
-            reinforced:
-              dailyHotNumbers.includes(number) || monthlyHotNumbers.includes(number),
-          };
+    const responseLotteries = [];
+    let latestConfirmedDate = "";
+    let totalHistoricalDraws = 0;
+
+    for (const lottery of lotteryRows) {
+      const history = await db
+        .select({
+          drawDate: drawResults.drawDate,
+          year: drawResults.year,
+          month: drawResults.month,
+          firstNumber: drawResults.firstNumber,
+          secondNumber: drawResults.secondNumber,
+          thirdNumber: drawResults.thirdNumber,
+        })
+        .from(drawResults)
+        .where(
+          and(
+            eq(drawResults.lotteryId, lottery.id),
+            inArray(drawResults.year, period.historicalYears),
+          ),
+        )
+        .orderBy(asc(drawResults.drawDate));
+
+      const allDraws = history as Draw[];
+      totalHistoricalDraws += allDraws.length;
+      const monthDraws = allDraws.filter((draw) => draw.month === targetMonth);
+      const dayDraws = monthDraws.filter(
+        (draw) => Number(draw.drawDate.slice(8, 10)) === targetDay,
+      );
+      const monthlyHotNumbers = rankedNumbers(monthDraws);
+      const dailyHotNumbers = rankedNumbers(dayDraws);
+      const candidates = rankedNumbers([...dayDraws, ...monthDraws], 5).map(
+        (number, index) => ({
+          number,
+          score: Math.max(50, 90 - index * 8),
+          signal: index === 0 ? "Mayor frecuencia real" : "Frecuencia histórica",
         }),
+      );
+
+      const weeklyCoincidences = Array.from({ length: 7 }, (_, index) => {
+        const date = addUtcDays(period.monday, index);
+        return {
+          day: DAYS[index],
+          date: formatIsoDate(date),
+          dateLabel: formatShortDate(date),
+          isSelected: formatIsoDate(date) === period.selectedDate,
+          numbers: coincidencesForDate(
+            date,
+            allDraws,
+            period.historicalYears,
+            dailyHotNumbers,
+            monthlyHotNumbers,
+          ),
+        };
+      });
+
+      const latest = allDraws.at(-1)?.drawDate ?? "";
+      if (latest > latestConfirmedDate) latestConfirmedDate = latest;
+      const meta = LOTTERY_META[lottery.slug] ?? {
+        shortName: lottery.name.toUpperCase(),
+        accent: "#0b6a4f",
       };
+
+      responseLotteries.push({
+        id: lottery.slug,
+        name: lottery.name,
+        shortName: meta.shortName,
+        accent: meta.accent,
+        candidates,
+        dailyHotNumbers,
+        monthlyHotNumbers,
+        weeklyCoincidences,
+        pairs: recurrentPairs(monthDraws),
+        historicalDrawCount: allDraws.length,
+        hasSufficientData:
+          new Set(allDraws.map((draw) => draw.year)).size === period.historicalYears.length,
+      });
+    }
+
+    const isComplete =
+      responseLotteries.length === 3 &&
+      responseLotteries.every((lottery) => lottery.hasSufficientData);
+
+    return NextResponse.json({
+      generatedAt: new Date().toISOString(),
+      selectedDate: period.selectedDate,
+      dataThrough: latestConfirmedDate || "Sin resultados históricos confirmados",
+      dataStatus: isComplete ? "complete" : "insufficient",
+      dataStatusLabel: isComplete
+        ? "Datos históricos reales disponibles"
+        : "Datos históricos insuficientes; no se generan valores simulados",
+      historicalDrawCount: totalHistoricalDraws,
+      weekLabel: `${formatShortDate(period.monday)} — ${formatShortDate(period.sunday)} ${period.sunday.getUTCFullYear()}`,
+      weekRange: `${formatShortDate(period.monday).toUpperCase()} — ${formatShortDate(period.sunday).toUpperCase()}`,
+      targetYear: period.targetYear,
+      monthLabel: new Intl.DateTimeFormat("es-DO", {
+        timeZone: "UTC",
+        month: "long",
+        year: "numeric",
+      }).format(targetDate),
+      dayLabel: new Intl.DateTimeFormat("es-DO", {
+        timeZone: "UTC",
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      }).format(targetDate),
+      historicalYears: period.historicalYears,
+      source: "cloudflare-d1-verified-results",
+      lotteries: responseLotteries,
     });
-
-    return {
-      id: lottery.id,
-      name: lottery.name,
-      shortName: lottery.shortName,
-      accent: lottery.accent,
-      candidates: numbers.slice(0, 5).map((number, index) => ({
-        number,
-        score: 91 - index * 5 - (lottery.seed % 4),
-        signal: ["Mes + semana", "Coincidencia alta", "Fuerza mensual", "Señal por posición", "Recurrencia semanal"][index],
-      })),
-      dailyHotNumbers,
-      monthlyHotNumbers,
-      weeklyCoincidences,
-      pairs: [`${numbers[0]}–${numbers[1]}`, `${numbers[1]}–${numbers[2]}`, `${numbers[0]}–${numbers[3]}`],
-    };
-  });
-
-  return NextResponse.json({
-    generatedAt: now.toISOString(),
-    dataThrough: new Intl.DateTimeFormat("es-DO", {
-      timeZone: TIME_ZONE,
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }).format(now),
-    selectedDate: period.selectedDate,
-    weekLabel: period.weekLabel,
-    weekRange: period.weekRange,
-    targetYear: period.targetYear,
-    monthLabel: period.monthLabel,
-    dayLabel: period.dayLabel,
-    historicalYears: period.historicalYears,
-    source: "prototype-v1",
-    lotteries,
-  });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "No fue posible calcular las estadísticas reales.",
+      },
+      { status: 500 },
+    );
+  }
 }
