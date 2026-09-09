@@ -57,12 +57,12 @@ El ranking completo debe conservarse aunque la interfaz muestre solamente una pa
 
 ## 3. Periodo objetivo y fecha de corte
 
-La semana de análisis es de **lunes a sábado**.
+La semana de análisis es de **lunes a domingo**.
 
 Dada una fecha seleccionada `d`, se obtiene la semana que la contiene:
 
 ```text
-W(d) = lunes de esa semana ... sábado de esa semana
+W(d) = lunes de esa semana ... domingo de esa semana
 ```
 
 Se define:
@@ -76,7 +76,7 @@ H = {Y-3, Y-2, Y-1}
 Ejemplo:
 
 ```text
-Semana objetivo: 27 julio 2026 — 1 agosto 2026
+Semana objetivo: 27 julio 2026 — 2 agosto 2026
 Y = 2026
 M = julio
 H = {2023, 2024, 2025}
@@ -147,17 +147,17 @@ Para cada año histórico `h`, sea `K_h` la cantidad de lunes del mismo mes. La 
 k_h = 1 + round(q × (K_h - 1))
 ```
 
-La semana histórica equivalente de ese año comienza en el lunes `k_h` y termina el sábado siguiente. Si el sábado cae en el mes siguiente, no se recorta la semana.
+La semana histórica equivalente de ese año comienza en el lunes `k_h` y termina el domingo siguiente. Si el domingo cae en el mes siguiente, no se recorta la semana.
 
 ### Ejemplo: última semana de julio de 2026
 
 El 27 de julio de 2026 es el último lunes de julio. Su posición relativa es el final del mes (`q = 1`). Por tanto se selecciona el último lunes de julio de cada año histórico:
 
 ```text
-2023: lunes 31 julio — sábado 5 agosto
-2024: lunes 29 julio — sábado 3 agosto
-2025: lunes 28 julio — sábado 2 agosto
-2026: lunes 27 julio — sábado 1 agosto  ← objetivo
+2023: lunes 31 julio — domingo 6 agosto
+2024: lunes 29 julio — domingo 4 agosto
+2025: lunes 28 julio — domingo 3 agosto
+2026: lunes 27 julio — domingo 2 agosto  ← objetivo
 ```
 
 Esta regla queda fijada para `STAT-V1.0`; cualquier cambio posterior requiere una nueva versión del método.
@@ -233,7 +233,7 @@ Esta señal tiene una muestra pequeña. Debe conservarse porque forma parte de l
 
 ### 7.3 Frecuencia por día de la semana
 
-Para cada día `d ∈ {lunes, martes, miércoles, jueves, viernes, sábado}`:
+Para cada día `d ∈ {lunes, martes, miércoles, jueves, viernes, sábado, domingo}`:
 
 ```text
 F_dia(l,n,d) = cantidad de apariciones de n
@@ -250,7 +250,7 @@ S_dia(l,n,d)
 
 Los **15 calientes del día** se obtienen a partir de `F_dia` para el día seleccionado.
 
-El domingo queda fuera del modelo semanal `STAT-V1.0`.
+El domingo forma parte del modelo semanal `STAT-V1.0` en las mismas condiciones que los demás días.
 
 ### 7.4 Frecuencia por posición
 
@@ -337,7 +337,7 @@ En `STAT-V1.0` las parejas **no modifican el puntaje de candidatos**. Su peso es
 
 ### 8.1 Puntaje diario
 
-Para cada día `d` de lunes a sábado:
+Para cada día `d` de lunes a domingo:
 
 ```text
 S_diario(l,n,d) =
@@ -359,7 +359,7 @@ No se elegirán pesos distintos antes del primer backtest. El uso de pesos igual
 
 ### 8.2 Puntaje semanal
 
-El puntaje principal mostrado en la tarjeta de cada lotería será el promedio de los seis puntajes diarios:
+El puntaje principal mostrado en la tarjeta de cada lotería será el promedio de los siete puntajes diarios:
 
 ```text
 S_semanal(l,n) = promedio(
@@ -368,7 +368,8 @@ S_semanal(l,n) = promedio(
   S_diario(l,n,miércoles),
   S_diario(l,n,jueves),
   S_diario(l,n,viernes),
-  S_diario(l,n,sábado)
+  S_diario(l,n,sábado),
+  S_diario(l,n,domingo)
 )
 ```
 
@@ -456,7 +457,7 @@ completitud = sorteos disponibles / sorteos esperados
 Antes de declarar un análisis como completo se requiere:
 
 - presencia de los tres años históricos;
-- semanas equivalentes completas según el calendario de la lotería;
+- semanas equivalentes completas de lunes a domingo según el calendario de la lotería;
 - al menos 95 % de completitud en las ventanas históricas amplias usadas por mes, día y posición;
 - 30 sorteos válidos para la señal de recencia.
 
@@ -474,7 +475,7 @@ Periodo objetivo:          semanas de 2025
 Método:                    STAT-V1.0
 ```
 
-Para cada semana de 2025 se reconstruirá la predicción utilizando únicamente información disponible antes de las `00:00` del lunes correspondiente.
+Para cada semana de 2025 se reconstruirá la predicción utilizando únicamente información disponible antes de las `00:00` del lunes correspondiente. La evaluación de esa semana abarcará desde el lunes hasta el domingo.
 
 ### 12.2 Baselines
 
@@ -529,7 +530,7 @@ Para comparar `STAT-V1.0` con los baselines se utilizará bootstrap pareado por 
 
 ```text
 10 000 remuestreos
-unidad de remuestreo: semana completa
+unidad de remuestreo: semana completa de lunes a domingo
 intervalo: 95 %
 ```
 
@@ -772,8 +773,7 @@ El generador actual todavía **no implementa `STAT-V1.0`**. Actualmente combina 
 
 También están pendientes:
 
-- implementar la regla formal de semanas equivalentes;
-- cambiar toda la lógica semanal a lunes-sábado;
+- implementar la regla formal de semanas equivalentes de lunes a domingo;
 - guardar realmente las predicciones y el ranking completo;
 - evitar sincronizaciones de la semana objetivo durante backtesting;
 - importar 2022 para permitir la prueba formal de 2025;
@@ -787,7 +787,7 @@ La versión se considerará implementada cuando:
 - la pantalla abra vacía;
 - la generación ocurra solamente por acción del usuario;
 - existan datos históricos desde 2022 para el primer backtest;
-- se calcule correctamente la semana objetivo lunes-sábado;
+- se calcule correctamente la semana objetivo lunes-domingo;
 - la regla de semana equivalente reproduzca los casos documentados;
 - se calculen las seis señales definidas;
 - cada señal use ranking normalizado de 0 a 100;
