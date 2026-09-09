@@ -2,6 +2,15 @@
 
 import { useMemo, useState, type CSSProperties } from "react";
 
+type PairSignal = {
+  pair: string;
+  numbers: [string, string];
+  sharedYears: number[];
+  weekSupport: number;
+  exactDrawCount: number;
+  combinedOccurrences: number;
+};
+
 type LotteryPrediction = {
   id: string;
   name: string;
@@ -23,7 +32,7 @@ type LotteryPrediction = {
       reinforced: boolean;
     }>;
   }>;
-  pairs: string[];
+  pairs: PairSignal[];
   historicalDrawCount: number;
   hasSufficientData: boolean;
 };
@@ -103,6 +112,15 @@ type EvaluationResponse = {
   evaluations: EvaluationRow[];
 };
 
+type WeeklyPerformance = {
+  slug: string;
+  name: string;
+  confirmed: number;
+  hitTop5: number;
+  hitTop10: number;
+  hitTop15: number;
+};
+
 const LOTTERY_TABS = [
   { id: "all", label: "Todas" },
   { id: "nacional", label: "Nacional" },
@@ -175,6 +193,50 @@ const evaluationStyles: Record<string, CSSProperties> = {
     color: "#66756f",
     fontSize: 10,
     lineHeight: 1.35,
+  },
+  performancePanel: {
+    marginTop: 18,
+    padding: 16,
+    borderRadius: 14,
+    border: "1px solid rgba(17,58,44,.12)",
+    background: "#f4f8f5",
+  },
+  performanceTitle: {
+    margin: 0,
+    fontFamily: "Georgia, serif",
+    fontSize: 20,
+    fontWeight: 500,
+  },
+  performanceIntro: {
+    margin: "6px 0 12px",
+    color: "#66756f",
+    fontSize: 10,
+    lineHeight: 1.5,
+  },
+  performanceTableWrap: {
+    overflowX: "auto",
+  },
+  performanceTable: {
+    width: "100%",
+    borderCollapse: "collapse",
+    minWidth: 560,
+    background: "white",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  performanceTh: {
+    padding: "10px 12px",
+    borderBottom: "1px solid rgba(17,58,44,.12)",
+    color: "#66756f",
+    fontSize: 9,
+    letterSpacing: ".05em",
+    textTransform: "uppercase",
+    textAlign: "left",
+  },
+  performanceTd: {
+    padding: "11px 12px",
+    borderBottom: "1px solid rgba(17,58,44,.08)",
+    fontSize: 11,
   },
   dayBlock: {
     marginTop: 22,
@@ -338,6 +400,11 @@ function formatEvaluationDate(value: string) {
   });
 }
 
+function formatHitRate(hits: number, confirmed: number) {
+  if (confirmed === 0) return "0/0";
+  return `${hits}/${confirmed} (${Math.round((hits / confirmed) * 100)}%)`;
+}
+
 function statusAppearance(row: EvaluationRow) {
   if (row.status === "review_required") {
     return { text: "REVISIÓN REQUERIDA", background: "#fff0ec", color: "#9f341e" };
@@ -378,6 +445,43 @@ export default function Home() {
   const evaluationDates = useMemo(
     () => [...new Set(visibleEvaluations.map((item) => item.date))].sort(),
     [visibleEvaluations],
+  );
+
+  const weeklyPerformance = useMemo<WeeklyPerformance[]>(() => {
+    if (!evaluation) return [];
+    const slugs = activeTab === "all"
+      ? ["nacional", "leidsa", "loteka"]
+      : [activeTab];
+
+    return slugs.map((slug) => {
+      const rows = evaluation.evaluations.filter(
+        (item) => item.lottery === slug && item.status === "confirmed",
+      );
+      const name = evaluation.evaluations.find((item) => item.lottery === slug)?.lotteryName ?? slug;
+      return {
+        slug,
+        name,
+        confirmed: rows.length,
+        hitTop5: rows.filter((item) => item.hitTop5).length,
+        hitTop10: rows.filter((item) => item.hitTop10).length,
+        hitTop15: rows.filter((item) => item.hitTop15).length,
+      };
+    });
+  }, [activeTab, evaluation]);
+
+  const weeklyPerformanceTotal = useMemo(
+    () => weeklyPerformance.reduce(
+      (total, item) => ({
+        slug: "total",
+        name: "TOTAL",
+        confirmed: total.confirmed + item.confirmed,
+        hitTop5: total.hitTop5 + item.hitTop5,
+        hitTop10: total.hitTop10 + item.hitTop10,
+        hitTop15: total.hitTop15 + item.hitTop15,
+      }),
+      { slug: "total", name: "TOTAL", confirmed: 0, hitTop5: 0, hitTop10: 0, hitTop15: 0 } as WeeklyPerformance,
+    ),
+    [weeklyPerformance],
   );
 
   async function loadEvaluations(date: string) {
@@ -728,8 +832,36 @@ export default function Home() {
 
                   <div className="pairRow">
                     <span>Parejas recurrentes en semanas equivalentes</span>
-                    <div>{lottery.pairs.map((pair) => <b key={pair}>{pair}</b>)}</div>
-                    {lottery.pairs.length === 0 && <small>Sin parejas recurrentes verificadas.</small>}
+                    <small style={{ display: "block", margin: "6px 0 10px", lineHeight: 1.45 }}>
+                      Soporte conjunto en al menos 2 de las 3 semanas históricas. No significa necesariamente que ambos números hayan salido juntos en un mismo sorteo.
+                    </small>
+                    <div style={{ display: "grid", gap: 7 }}>
+                      {lottery.pairs.map((pair) => (
+                        <div
+                          key={pair.pair}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "8px 10px",
+                            border: "1px solid rgba(17,58,44,.1)",
+                            borderRadius: 10,
+                          }}
+                        >
+                          <b>{pair.pair}</b>
+                          <small style={{ textAlign: "right" }}>
+                            {pair.weekSupport}/3 semanas · {pair.sharedYears.join(" · ")}
+                            {pair.exactDrawCount > 0
+                              ? ` · juntos en ${pair.exactDrawCount} sorteo${pair.exactDrawCount === 1 ? "" : "s"}`
+                              : " · sin coaparición exacta"}
+                          </small>
+                        </div>
+                      ))}
+                    </div>
+                    {lottery.pairs.length === 0 && (
+                      <small>No se detectaron pares con soporte conjunto en 2 o más semanas históricas.</small>
+                    )}
                   </div>
                 </article>
               ))}
@@ -789,6 +921,49 @@ export default function Home() {
                         <span style={evaluationStyles.summaryLabel}>Requieren revisión</span>
                       </div>
                     )}
+                  </div>
+
+                  <div style={evaluationStyles.performancePanel}>
+                    <h4 style={evaluationStyles.performanceTitle}>HIT semanal acumulado</h4>
+                    <p style={evaluationStyles.performanceIntro}>
+                      Cuenta en cuántos sorteos confirmados apareció al menos un número del ranking semanal congelado. El denominador es la cantidad de sorteos ya evaluados de cada lotería.
+                    </p>
+                    <div style={evaluationStyles.performanceTableWrap}>
+                      <table style={evaluationStyles.performanceTable}>
+                        <thead>
+                          <tr>
+                            <th style={evaluationStyles.performanceTh}>Lotería</th>
+                            <th style={evaluationStyles.performanceTh}>Evaluados</th>
+                            <th style={evaluationStyles.performanceTh}>HIT@5</th>
+                            <th style={evaluationStyles.performanceTh}>HIT@10</th>
+                            <th style={evaluationStyles.performanceTh}>HIT@15</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {weeklyPerformance.map((item) => (
+                            <tr key={item.slug}>
+                              <td style={evaluationStyles.performanceTd}><b>{item.name}</b></td>
+                              <td style={evaluationStyles.performanceTd}>{item.confirmed}</td>
+                              <td style={evaluationStyles.performanceTd}>{formatHitRate(item.hitTop5, item.confirmed)}</td>
+                              <td style={evaluationStyles.performanceTd}>{formatHitRate(item.hitTop10, item.confirmed)}</td>
+                              <td style={evaluationStyles.performanceTd}>{formatHitRate(item.hitTop15, item.confirmed)}</td>
+                            </tr>
+                          ))}
+                          {activeTab === "all" && (
+                            <tr>
+                              <td style={{ ...evaluationStyles.performanceTd, fontWeight: 800 }}>TOTAL</td>
+                              <td style={{ ...evaluationStyles.performanceTd, fontWeight: 800 }}>{weeklyPerformanceTotal.confirmed}</td>
+                              <td style={{ ...evaluationStyles.performanceTd, fontWeight: 800 }}>{formatHitRate(weeklyPerformanceTotal.hitTop5, weeklyPerformanceTotal.confirmed)}</td>
+                              <td style={{ ...evaluationStyles.performanceTd, fontWeight: 800 }}>{formatHitRate(weeklyPerformanceTotal.hitTop10, weeklyPerformanceTotal.confirmed)}</td>
+                              <td style={{ ...evaluationStyles.performanceTd, fontWeight: 800 }}>{formatHitRate(weeklyPerformanceTotal.hitTop15, weeklyPerformanceTotal.confirmed)}</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p style={evaluationStyles.performanceIntro}>
+                      HIT@5 está contenido dentro de HIT@10 y HIT@15. No son aciertos independientes y no deben sumarse entre sí.
+                    </p>
                   </div>
 
                   {evaluationDates.map((date) => {
