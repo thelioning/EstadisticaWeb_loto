@@ -978,6 +978,27 @@ export default function Home() {
                         <div style={evaluationStyles.cards}>
                           {rows.map((row) => {
                             const appearance = statusAppearance(row);
+                            const frozenWeeklyNumbers = result.lotteries.find(
+                              (lottery) => lottery.id === row.lottery,
+                            )?.weeklyHotNumbers ?? [];
+                            const weeklyMatches = row.status === "confirmed" && row.result
+                              ? row.result.flatMap((number, index) => {
+                                  const rankIndex = frozenWeeklyNumbers.indexOf(number);
+                                  if (rankIndex < 0) return [];
+                                  const weeklyRank = rankIndex + 1;
+                                  const hitLevels = weeklyRank <= 5
+                                    ? "HIT@5 · HIT@10 · HIT@15"
+                                    : weeklyRank <= 10
+                                      ? "HIT@10 · HIT@15"
+                                      : "HIT@15";
+                                  return [{
+                                    number,
+                                    resultPosition: index + 1,
+                                    weeklyRank,
+                                    hitLevels,
+                                  }];
+                                })
+                              : [];
                             return (
                               <article style={evaluationStyles.card} key={`${row.predictionId}-${row.date}`}>
                                 <div style={evaluationStyles.cardTop}>
@@ -1032,6 +1053,55 @@ export default function Home() {
                                     <span style={evaluationStyles.metric}>Hit semanal @5: {row.hitTop5 ? "SÍ" : "NO"}</span>
                                     <span style={evaluationStyles.metric}>@10: {row.hitTop10 ? "SÍ" : "NO"}</span>
                                     <span style={evaluationStyles.metric}>@15: {row.hitTop15 ? "SÍ" : "NO"}</span>
+                                  </div>
+                                )}
+
+                                {row.status === "confirmed" && (
+                                  <div
+                                    style={{
+                                      marginTop: 10,
+                                      padding: "10px 11px",
+                                      borderRadius: 10,
+                                      border: "1px solid rgba(17,58,44,.10)",
+                                      background: weeklyMatches.length > 0 ? "#edf9f4" : "#f6f4ef",
+                                    }}
+                                  >
+                                    <div style={{ ...evaluationStyles.label, marginTop: 0 }}>
+                                      Coincidencias con ranking semanal congelado
+                                    </div>
+                                    {weeklyMatches.length > 0 ? (
+                                      <div style={{ display: "grid", gap: 6 }}>
+                                        {weeklyMatches.map((match) => (
+                                          <div
+                                            key={`${row.date}-${row.lottery}-weekly-${match.number}-${match.resultPosition}`}
+                                            style={{
+                                              display: "flex",
+                                              alignItems: "center",
+                                              gap: 8,
+                                              flexWrap: "wrap",
+                                            }}
+                                          >
+                                            <span
+                                              style={{
+                                                ...evaluationStyles.number,
+                                                background: "#07563f",
+                                                borderColor: "#07563f",
+                                                color: "white",
+                                              }}
+                                            >
+                                              {match.number}
+                                            </span>
+                                            <span style={{ fontSize: 10, color: "#07563f", fontWeight: 750 }}>
+                                              rango congelado #{match.weeklyRank} · salió P{match.resultPosition} · {match.hitLevels}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span style={{ fontSize: 10, color: "#66756f" }}>
+                                        Ninguno de los 3 números reales apareció dentro del Top 15 semanal congelado.
+                                      </span>
+                                    )}
                                   </div>
                                 )}
 
