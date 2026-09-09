@@ -1,0 +1,32 @@
+CREATE TABLE `prediction_evaluations` (
+  `id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+  `prediction_id` integer NOT NULL,
+  `lottery_id` integer NOT NULL,
+  `draw_result_id` integer,
+  `target_date` text NOT NULL,
+  `weekday` integer NOT NULL,
+  `status` text DEFAULT 'pending' NOT NULL,
+  `daily_candidates_snapshot` text DEFAULT '[]' NOT NULL,
+  `weekly_top5_snapshot` text DEFAULT '[]' NOT NULL,
+  `weekly_top10_snapshot` text DEFAULT '[]' NOT NULL,
+  `weekly_top15_snapshot` text DEFAULT '[]' NOT NULL,
+  `result_numbers` text DEFAULT '[]' NOT NULL,
+  `daily_matched_positions` text DEFAULT '[]' NOT NULL,
+  `daily_match_count` integer DEFAULT 0 NOT NULL,
+  `top5_matched_positions` text DEFAULT '[]' NOT NULL,
+  `top10_matched_positions` text DEFAULT '[]' NOT NULL,
+  `top15_matched_positions` text DEFAULT '[]' NOT NULL,
+  `hit_top5` integer DEFAULT false NOT NULL,
+  `hit_top10` integer DEFAULT false NOT NULL,
+  `hit_top15` integer DEFAULT false NOT NULL,
+  `position_evaluation` text DEFAULT 'not_applicable_stat_v1' NOT NULL,
+  `review_note` text,
+  `evaluated_at` text,
+  `created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  `updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  FOREIGN KEY (`prediction_id`) REFERENCES `predictions`(`id`) ON UPDATE no action ON DELETE no action,
+  FOREIGN KEY (`lottery_id`) REFERENCES `lotteries`(`id`) ON UPDATE no action ON DELETE no action,
+  FOREIGN KEY (`draw_result_id`) REFERENCES `draw_results`(`id`) ON UPDATE no action ON DELETE no action
+);
+CREATE UNIQUE INDEX `prediction_evaluations_prediction_date_unique` ON `prediction_evaluations` (`prediction_id`,`target_date`);
+CREATE INDEX `prediction_evaluations_date_status_idx` ON `prediction_evaluations` (`target_date`,`status`);
