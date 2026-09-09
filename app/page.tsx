@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
 type LotteryPrediction = {
   id: string;
@@ -72,7 +72,6 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedDate, setSelectedDate] = useState(currentDominicanDate);
-  const initialRefreshStarted = useRef(false);
 
   const visibleLotteries = useMemo(() => {
     if (!result) return [];
@@ -107,12 +106,6 @@ export default function Home() {
     }
   }
 
-  useEffect(() => {
-    if (initialRefreshStarted.current) return;
-    initialRefreshStarted.current = true;
-    void generatePredictions(currentDominicanDate());
-  }, []);
-
   function clearScreen() {
     setResult(null);
     setError("");
@@ -145,7 +138,7 @@ export default function Home() {
           <div className="heroActions">
             <button className="primaryButton" onClick={() => void generatePredictions(selectedDate)} disabled={loading}>
               <span className="spark">✦</span>
-              {loading ? "Actualizando…" : "Actualizar análisis"}
+              {loading ? "Generando…" : result ? "Actualizar análisis" : "Generar predicciones"}
             </button>
             <button className="secondaryButton" onClick={clearScreen} disabled={!result && !error}>
               Limpiar pantalla
