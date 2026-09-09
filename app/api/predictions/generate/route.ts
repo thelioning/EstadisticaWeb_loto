@@ -54,6 +54,15 @@ type LotteryRow = {
   name: string;
 };
 
+type PairSignal = {
+  pair: string;
+  numbers: [string, string];
+  sharedYears: number[];
+  weekSupport: number;
+  exactDrawCount: number;
+  combinedOccurrences: number;
+};
+
 type LotteryAnalysis = {
   lottery: LotteryRow;
   equivalentWeekDraws: Draw[];
@@ -69,7 +78,7 @@ type LotteryAnalysis = {
     dailyHotNumbers: string[];
     weeklyHotNumbers: string[];
     weeklyCoincidences: ReturnType<typeof coincidenceDayPayload>[];
-    pairs: string[];
+    pairs: PairSignal[];
     historicalDrawCount: number;
     hasSufficientData: boolean;
   };
@@ -144,23 +153,73 @@ function drawsInRange(draws: Draw[], range: IsoWeekRange) {
   return draws.filter((draw) => rangeContainsDate(draw.drawDate, range));
 }
 
-function recurrentPairs(draws: Draw[], limit = 3) {
-  const counts = new Map<string, number>();
+function recurrentPairs(
+  draws: Draw[],
+  historicalRanges: IsoWeekRange[],
+  limit = 5,
+): PairSignal[] {
+  const numberStats = new Map<string, { years: Set<number>; totalCount: number }>();
+  const exactPairCounts = new Map<string, number>();
+
   for (const draw of draws) {
+    const matchingRange = historicalRanges.find((range) =>
+      rangeContainsDate(draw.drawDate, range),
+    );
+    if (!matchingRange) continue;
+
     const numbers = [...new Set(drawNumbers(draw))].sort();
+    for (const number of numbers) {
+      const stat = numberStats.get(number) ?? { years: new Set<number>(), totalCount: 0 };
+      stat.years.add(matchingRange.isoYear);
+      stat.totalCount += 1;
+      numberStats.set(number, stat);
+    }
+
     for (let left = 0; left < numbers.length; left += 1) {
       for (let right = left + 1; right < numbers.length; right += 1) {
         const pair = `${numbers[left]}–${numbers[right]}`;
-        counts.set(pair, (counts.get(pair) ?? 0) + 1);
+        exactPairCounts.set(pair, (exactPairCounts.get(pair) ?? 0) + 1);
       }
     }
   }
 
-  return [...counts.entries()]
-    .filter(([, count]) => count > 1)
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, limit)
-    .map(([pair]) => pair);
+  const numbers = [...numberStats.keys()].sort();
+  const pairs: PairSignal[] = [];
+
+  for (let left = 0; left < numbers.length; left += 1) {
+    for (let right = left + 1; right < numbers.length; right += 1) {
+      const leftNumber = numbers[left];
+      const rightNumber = numbers[right];
+      const leftStat = numberStats.get(leftNumber);
+      const rightStat = numberStats.get(rightNumber);
+      if (!leftStat || !rightStat) continue;
+
+      const sharedYears = [...leftStat.years]
+        .filter((year) => rightStat.years.has(year))
+        .sort();
+      if (sharedYears.length < 2) continue;
+
+      const pair = `${leftNumber}–${rightNumber}`;
+      pairs.push({
+        pair,
+        numbers: [leftNumber, rightNumber],
+        sharedYears,
+        weekSupport: sharedYears.length,
+        exactDrawCount: exactPairCounts.get(pair) ?? 0,
+        combinedOccurrences: leftStat.totalCount + rightStat.totalCount,
+      });
+    }
+  }
+
+  return pairs
+    .sort(
+      (a, b) =>
+        b.weekSupport - a.weekSupport ||
+        b.exactDrawCount - a.exactDrawCount ||
+        b.combinedOccurrences - a.combinedOccurrences ||
+        a.pair.localeCompare(b.pair),
+    )
+    .slice(0, limit);
 }
 
 function coincidencesForWeekday(
@@ -461,7 +520,7 @@ export async function POST(request: NextRequest) {
           dailyHotNumbers,
           weeklyHotNumbers,
           weeklyCoincidences,
-          pairs: recurrentPairs(equivalentWeekDraws),
+          pairs: recurrentPairs(equivalentWeekDraws, validHistoricalRanges),
           historicalDrawCount: equivalentWeekDraws.length,
           hasSufficientData,
         },
