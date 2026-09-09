@@ -7,9 +7,9 @@ type LotteryPrediction = {
   name: string;
   shortName: string;
   accent: string;
+  methodVersion: string;
   candidates: Array<{ number: string; score: number; signal: string }>;
   dailyHotNumbers: string[];
-  monthlyHotNumbers: string[];
   weeklyHotNumbers: string[];
   weeklyCoincidences: Array<{
     day: string;
@@ -41,6 +41,7 @@ type PredictionResponse = {
   generatedAt: string;
   selectedDate: string;
   isoWeek: number;
+  methodVersion: string;
   dataThrough: string;
   weekLabel: string;
   weekRange: string;
@@ -96,14 +97,23 @@ export default function Home() {
     setLoading(true);
     setError("");
     try {
-      // La sincronización actualiza la base disponible. El motor de análisis usa
-      // exclusivamente las semanas históricas equivalentes, no resultados de la
-      // propia semana objetivo.
-      await fetch("/api/admin/sync", {
+      // Primero se cargan exclusivamente las tres semanas ISO históricas equivalentes.
+      // La propia semana objetivo no participa en STAT-V1.0.
+      const syncResponse = await fetch("/api/admin/sync-history", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date }),
-      }).catch(() => null);
+        body: JSON.stringify({ targetDate: date }),
+      });
+      const syncPayload = (await syncResponse.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+
+      if (!syncResponse.ok) {
+        throw new Error(
+          syncPayload?.error ??
+            `No fue posible cargar el histórico real (HTTP ${syncResponse.status}).`,
+        );
+      }
 
       const response = await fetch("/api/predictions/generate", {
         method: "POST",
@@ -278,7 +288,7 @@ export default function Home() {
                 <strong>{result.dataStatusLabel}</strong>
                 <span>{result.historicalDrawCount} sorteos históricos verificados en las semanas ISO equivalentes.</span>
               </div>
-              <b>{result.dataStatus === "complete" ? "DATOS REALES" : "SIN SIMULACIÓN"}</b>
+              <b>{result.dataStatus === "complete" ? `DATOS REALES · ${result.methodVersion}` : "SIN SIMULACIÓN"}</b>
             </div>
 
             <section className="coincidenceBoard" aria-labelledby="coincidence-title">
@@ -292,7 +302,7 @@ export default function Home() {
                 </span>
               </div>
               <p className="coincidenceIntro">
-                Cada columna compara el mismo día de la semana ISO en 2023, 2024 y 2025.
+                Cada columna compara el mismo día de la semana ISO en {result.historicalYears.join(", ")}.
                 La estrella señala un número reforzado por la frecuencia semanal o diaria.
               </p>
 
@@ -336,7 +346,7 @@ export default function Home() {
                       <span className="lotteryCode">{lottery.shortName}</span>
                       <h3>{lottery.name}</h3>
                     </div>
-                    <span className="signalBadge">Semana ISO {result.isoWeek}</span>
+                    <span className="signalBadge">{lottery.methodVersion}</span>
                   </div>
 
                   <div className="cardSection">
@@ -366,8 +376,8 @@ export default function Home() {
 
                   <div className="cardSection hotSection">
                     <div className="sectionTitle">
-                      <span>15 fuertes del día equivalente</span>
-                      <small>{result.dayLabel}</small>
+                      <span>Fuertes del día equivalente</span>
+                      <small>{result.dayLabel} · máximo 9 distintos</small>
                     </div>
                     <div className="ballCloud">
                       {lottery.dailyHotNumbers.map((number) => <Ball key={number} value={number} size="small" />)}
