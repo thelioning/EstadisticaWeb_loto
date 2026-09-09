@@ -51,15 +51,26 @@ export const predictions = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     lotteryId: integer("lottery_id").notNull().references(() => lotteries.id),
+    isoYear: integer("iso_year").notNull().default(0),
+    isoWeek: integer("iso_week").notNull().default(0),
     weekStart: text("week_start").notNull(),
     weekEnd: text("week_end").notNull(),
     generatedAt: text("generated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     dataAvailableThrough: text("data_available_through").notNull(),
     methodVersion: text("method_version").notNull(),
     methodParameters: text("method_parameters").notNull(),
+    projectionKind: text("projection_kind").notNull().default("unspecified"),
     status: text("status").notNull().default("generated"),
   },
-  (table) => [index("predictions_week_idx").on(table.weekStart, table.weekEnd)],
+  (table) => [
+    index("predictions_week_idx").on(table.weekStart, table.weekEnd),
+    uniqueIndex("predictions_freeze_unique").on(
+      table.lotteryId,
+      table.weekStart,
+      table.weekEnd,
+      table.methodVersion,
+    ),
+  ],
 );
 
 export const predictionCandidates = sqliteTable(
@@ -67,9 +78,18 @@ export const predictionCandidates = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     predictionId: integer("prediction_id").notNull().references(() => predictions.id),
+    scope: text("scope").notNull().default("weekly"),
+    targetDate: text("target_date").notNull().default(""),
+    weekday: integer("weekday"),
     number: text("number").notNull(),
     ranking: integer("ranking").notNull(),
     score: real("score").notNull(),
+    totalCount: integer("total_count").notNull().default(0),
+    yearSupport: integer("year_support").notNull().default(0),
+    dayRecurrenceCount: integer("day_recurrence_count").notNull().default(0),
+    exactPositionRecurrenceCount: integer("exact_position_recurrence_count").notNull().default(0),
+    positionCounts: text("position_counts").notNull().default("[0,0,0]"),
+    years: text("years").notNull().default("[]"),
     monthlyScore: real("monthly_score").notNull().default(0),
     weeklyScore: real("weekly_score").notNull().default(0),
     weekdayScore: real("weekday_score").notNull().default(0),
@@ -79,7 +99,12 @@ export const predictionCandidates = sqliteTable(
     explanation: text("explanation").notNull(),
   },
   (table) => [
-    uniqueIndex("prediction_candidates_rank_unique").on(table.predictionId, table.ranking),
+    uniqueIndex("prediction_candidates_scope_rank_unique").on(
+      table.predictionId,
+      table.scope,
+      table.targetDate,
+      table.ranking,
+    ),
   ],
 );
 
