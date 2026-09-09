@@ -10,6 +10,14 @@ import {
   rangeContainsDate,
   type IsoWeekRange,
 } from "../../../../lib/iso-week";
+import {
+  buildStatV1DailyRanking,
+  buildStatV1Ranking,
+  STAT_V1_METHOD_VERSION,
+  statV1Signal,
+  type HistoricalWeekContext,
+  type StatDraw,
+} from "../../../../lib/stat-v1";
 
 const TIME_ZONE = "America/Santo_Domingo";
 const MONTHS = [
@@ -23,19 +31,9 @@ const LOTTERY_META: Record<string, { shortName: string; accent: string }> = {
   loteka: { shortName: "LOTEKA", accent: "#9a4e20" },
 };
 
-type Draw = {
-  drawDate: string;
+type Draw = StatDraw & {
   year: number;
   month: number;
-  firstNumber: string;
-  secondNumber: string;
-  thirdNumber: string;
-};
-
-type NumberStat = {
-  number: string;
-  count: number;
-  score: number;
 };
 
 function formatShortDate(date: Date) {
@@ -89,37 +87,6 @@ function analysisPeriod(targetDate: Date) {
 
 function drawNumbers(draw: Draw) {
   return [draw.firstNumber, draw.secondNumber, draw.thirdNumber];
-}
-
-function frequencyRanking(draws: Draw[]): NumberStat[] {
-  const counts = new Map<string, number>();
-  for (let value = 0; value < 100; value += 1) {
-    counts.set(String(value).padStart(2, "0"), 0);
-  }
-
-  for (const draw of draws) {
-    for (const number of drawNumbers(draw)) {
-      counts.set(number, (counts.get(number) ?? 0) + 1);
-    }
-  }
-
-  const ordered = [...counts.entries()].sort(
-    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
-  );
-  const maxCount = ordered[0]?.[1] ?? 0;
-
-  return ordered.map(([number, count]) => ({
-    number,
-    count,
-    score: maxCount > 0 ? Math.round((count / maxCount) * 100) : 0,
-  }));
-}
-
-function rankedNumbers(draws: Draw[], limit = 15) {
-  return frequencyRanking(draws)
-    .filter((item) => item.count > 0)
-    .slice(0, limit)
-    .map((item) => item.number);
 }
 
 function drawsInRange(draws: Draw[], range: IsoWeekRange) {
@@ -219,11 +186,15 @@ export async function POST(request: NextRequest) {
     const body = (await request.json().catch(() => ({}))) as { targetDate?: string };
     const targetDate = parseTargetDate(body.targetDate ?? "");
     const period = analysisPeriod(targetDate);
-    const targetMonth = targetDate.getUTCMonth() + 1;
     const selectedWeekdayIndex = (targetDate.getUTCDay() + 6) % 7;
-    const validHistoricalRanges = period.historicalWeeks
-      .map((item) => item.range)
-      .filter((range): range is IsoWeekRange => range !== null);
+    const validHistoricalWeeks = period.historicalWeeks.filter(
+      (item): item is { isoYear: number; range: IsoWeekRange } => item.range !== null,
+    );
+    const validHistoricalRanges = validHistoricalWeeks.map((item) => item.range);
+    const statContexts: HistoricalWeekContext[] = validHistoricalWeeks.map((item) => ({
+      isoYear: item.isoYear,
+      monday: item.range.monday,
+    }));
 
     const queryYears = [
       ...period.historicalYears,
@@ -267,39 +238,37 @@ export async function POST(request: NextRequest) {
       const equivalentWeekDraws = validHistoricalRanges.flatMap((range) =>
         drawsInRange(allDraws, range),
       );
-      const selectedDayDraws = drawsForEquivalentWeekday(
-        allDraws,
-        validHistoricalRanges,
-        selectedWeekdayIndex,
-      );
-      const monthDraws = allDraws.filter(
-        (draw) =>
-          period.historicalYears.includes(draw.year) && draw.month === targetMonth,
-      );
 
       totalHistoricalDraws += equivalentWeekDraws.length;
 
-      const weeklyRanking = frequencyRanking(equivalentWeekDraws);
-      const weeklyHotNumbers = weeklyRanking
-        .filter((item) => item.count > 0)
-        .slice(0, 15)
-        .map((item) => item.number);
-      const dailyHotNumbers = rankedNumbers(selectedDayDraws);
-      const monthlyHotNumbers = rankedNumbers(monthDraws);
-      const candidates = weeklyRanking
-        .filter((item) => item.count > 0)
-        .slice(0, 5)
-        .map((item) => ({
-          number: item.number,
-          score: item.score,
-          signal: `${item.count} apariciones en semanas ISO equivalentes`,
-        }));
+      const weeklyRanking = buildStatV1Ranking(equivalentWeekDraws, statContexts);
+      const dailyRanking = buildStatV1DailyRanking(
+        equivalentWeekDraws,
+        statContexts,
+        selectedWeekdayIndex,
+      );
+      const weeklyHotNumbers = weeklyRanking.slice(0, 15).map((item) => item.number);
+      const dailyHotNumbers = dailyRanking.slice(0, 9).map((item) => item.number);
+      const candidates = weeklyRanking.slice(0, 5).map((item) => ({
+        number: item.number,
+        ranking: item.ranking,
+        score: item.score,
+        signal: statV1Signal(item),
+        totalCount: item.totalCount,
+        yearSupport: item.yearSupport,
+        dayRecurrenceCount: item.dayRecurrenceCount,
+        exactPositionRecurrenceCount: item.exactPositionRecurrenceCount,
+        positionCounts: item.positionCounts,
+        years: item.years,
+      }));
 
       const weeklyCoincidences = Array.from({ length: 7 }, (_, index) => {
         const targetDay = addUtcDays(period.targetRange.monday, index);
-        const dayHotNumbers = rankedNumbers(
-          drawsForEquivalentWeekday(allDraws, validHistoricalRanges, index),
-        );
+        const dayHotNumbers = buildStatV1DailyRanking(
+          equivalentWeekDraws,
+          statContexts,
+          index,
+        ).map((item) => item.number);
         const reinforced = new Set([...weeklyHotNumbers, ...dayHotNumbers]);
 
         return {
@@ -309,7 +278,7 @@ export async function POST(request: NextRequest) {
           isSelected: formatIsoDate(targetDay) === period.selectedDate,
           numbers: coincidencesForWeekday(
             index,
-            allDraws,
+            equivalentWeekDraws,
             validHistoricalRanges,
             reinforced,
           ),
@@ -327,8 +296,9 @@ export async function POST(request: NextRequest) {
 
       const hasSufficientData =
         period.historicalWeeks.every((item) => item.range !== null) &&
+        validHistoricalRanges.length === 3 &&
         validHistoricalRanges.every(
-          (range) => drawsInRange(allDraws, range).length > 0,
+          (range) => drawsInRange(allDraws, range).length === 7,
         );
 
       responseLotteries.push({
@@ -336,9 +306,9 @@ export async function POST(request: NextRequest) {
         name: lottery.name,
         shortName: meta.shortName,
         accent: meta.accent,
+        methodVersion: STAT_V1_METHOD_VERSION,
         candidates,
         dailyHotNumbers,
-        monthlyHotNumbers,
         weeklyHotNumbers,
         weeklyCoincidences,
         pairs: recurrentPairs(equivalentWeekDraws),
@@ -355,6 +325,7 @@ export async function POST(request: NextRequest) {
       generatedAt: new Date().toISOString(),
       selectedDate: period.selectedDate,
       isoWeek: period.isoWeek,
+      methodVersion: STAT_V1_METHOD_VERSION,
       dataThrough: latestConfirmedDate || "Sin resultados históricos confirmados",
       dataStatus: isComplete ? "complete" : "insufficient",
       dataStatusLabel: isComplete
