@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 
 type LotteryPrediction = {
   id: string;
@@ -56,12 +56,262 @@ type PredictionResponse = {
   lotteries: LotteryPrediction[];
 };
 
+type MatchedPosition = {
+  position: 1 | 2 | 3;
+  number: string;
+};
+
+type EvaluationRow = {
+  date: string;
+  day: string;
+  lottery: string;
+  lotteryName: string;
+  predictionId: number;
+  projectionKind: string;
+  comparisonBasis: string;
+  status: "pending" | "confirmed" | "review_required";
+  dailyCandidates: string[];
+  result: string[] | null;
+  coincidences: MatchedPosition[];
+  coincidenceCount: number;
+  hitTop5: boolean;
+  hitTop10: boolean;
+  hitTop15: boolean;
+  positionEvaluation: string;
+  positionNote: string;
+  evaluatedAt?: string | null;
+  reviewNote?: string | null;
+};
+
+type EvaluationResponse = {
+  methodVersion: string;
+  isoYear: number;
+  isoWeek: number;
+  weekStart: string;
+  weekEnd: string;
+  currentDominicanDate: string;
+  evaluationRule: string;
+  source: string;
+  summary: {
+    totalRows: number;
+    confirmed: number;
+    pending: number;
+    reviewRequired: number;
+    withCoincidences: number;
+    zeroCoincidences: number;
+  };
+  evaluations: EvaluationRow[];
+};
+
 const LOTTERY_TABS = [
   { id: "all", label: "Todas" },
   { id: "nacional", label: "Nacional" },
   { id: "leidsa", label: "Leidsa" },
   { id: "loteka", label: "Loteka" },
 ];
+
+const evaluationStyles: Record<string, CSSProperties> = {
+  section: {
+    marginTop: 28,
+    padding: 24,
+    border: "1px solid rgba(17,58,44,.12)",
+    borderRadius: 19,
+    background: "#fbfaf6",
+    boxShadow: "0 16px 45px rgba(24,54,43,.04)",
+  },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 18,
+    flexWrap: "wrap",
+  },
+  title: {
+    margin: "6px 0 0",
+    fontFamily: "Georgia, serif",
+    fontSize: 28,
+    fontWeight: 500,
+  },
+  refreshButton: {
+    minHeight: 42,
+    padding: "0 16px",
+    border: 0,
+    borderRadius: 11,
+    background: "#0b6a4f",
+    color: "white",
+    fontSize: 12,
+    fontWeight: 720,
+  },
+  notice: {
+    marginTop: 12,
+    padding: "12px 14px",
+    borderRadius: 12,
+    background: "#fff7e5",
+    border: "1px solid #ead49f",
+    color: "#75530a",
+    fontSize: 11,
+    lineHeight: 1.55,
+  },
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(135px, 1fr))",
+    gap: 8,
+    marginTop: 18,
+  },
+  summaryCard: {
+    padding: "13px 14px",
+    borderRadius: 12,
+    border: "1px solid rgba(17,58,44,.1)",
+    background: "white",
+  },
+  summaryValue: {
+    display: "block",
+    fontFamily: "Georgia, serif",
+    fontSize: 24,
+    lineHeight: 1,
+    marginBottom: 6,
+  },
+  summaryLabel: {
+    color: "#66756f",
+    fontSize: 10,
+    lineHeight: 1.35,
+  },
+  dayBlock: {
+    marginTop: 22,
+    paddingTop: 20,
+    borderTop: "1px solid rgba(17,58,44,.12)",
+  },
+  dayHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    gap: 12,
+    marginBottom: 10,
+  },
+  dayTitle: {
+    margin: 0,
+    fontFamily: "Georgia, serif",
+    fontSize: 21,
+    fontWeight: 500,
+  },
+  dayDate: {
+    color: "#66756f",
+    fontSize: 10,
+  },
+  cards: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 10,
+  },
+  card: {
+    padding: 16,
+    borderRadius: 14,
+    border: "1px solid rgba(17,58,44,.12)",
+    background: "white",
+  },
+  cardTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 13,
+  },
+  lottery: {
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: ".08em",
+    textTransform: "uppercase",
+  },
+  status: {
+    padding: "5px 8px",
+    borderRadius: 999,
+    fontSize: 9,
+    fontWeight: 800,
+    letterSpacing: ".04em",
+  },
+  label: {
+    margin: "10px 0 5px",
+    color: "#66756f",
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: ".07em",
+    textTransform: "uppercase",
+  },
+  numberRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  number: {
+    minWidth: 34,
+    height: 34,
+    padding: "0 8px",
+    display: "inline-grid",
+    placeItems: "center",
+    borderRadius: 999,
+    border: "1px solid rgba(17,58,44,.14)",
+    background: "#fbfaf6",
+    fontSize: 11,
+    fontWeight: 750,
+  },
+  resultNumber: {
+    minWidth: 38,
+    height: 38,
+    display: "inline-grid",
+    placeItems: "center",
+    borderRadius: 999,
+    background: "#13231d",
+    color: "white",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  zero: {
+    marginTop: 12,
+    padding: "9px 10px",
+    borderRadius: 10,
+    background: "#fff0ec",
+    color: "#9f341e",
+    fontSize: 11,
+    fontWeight: 800,
+  },
+  hit: {
+    marginTop: 12,
+    padding: "9px 10px",
+    borderRadius: 10,
+    background: "#edf9f4",
+    color: "#07563f",
+    fontSize: 11,
+    fontWeight: 800,
+  },
+  pending: {
+    marginTop: 12,
+    padding: "9px 10px",
+    borderRadius: 10,
+    background: "#f4f2eb",
+    color: "#66756f",
+    fontSize: 11,
+    fontWeight: 700,
+  },
+  metrics: {
+    display: "flex",
+    gap: 6,
+    flexWrap: "wrap",
+    marginTop: 11,
+  },
+  metric: {
+    padding: "5px 8px",
+    borderRadius: 999,
+    border: "1px solid rgba(17,58,44,.12)",
+    fontSize: 9,
+    color: "#66756f",
+  },
+  footerNote: {
+    margin: "15px 0 0",
+    color: "#66756f",
+    fontSize: 10,
+    lineHeight: 1.55,
+  },
+};
 
 function Ball({ value, size = "normal" }: { value: string; size?: "normal" | "small" }) {
   return <span className={`ball ${size === "small" ? "ballSmall" : ""}`}>{value}</span>;
@@ -79,11 +329,36 @@ function currentDominicanDate() {
   return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
+function formatEvaluationDate(value: string) {
+  return new Date(`${value}T12:00:00.000Z`).toLocaleDateString("es-DO", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "America/Santo_Domingo",
+  });
+}
+
+function statusAppearance(row: EvaluationRow) {
+  if (row.status === "review_required") {
+    return { text: "REVISIÓN REQUERIDA", background: "#fff0ec", color: "#9f341e" };
+  }
+  if (row.status === "pending") {
+    return { text: "PENDIENTE", background: "#f4f2eb", color: "#66756f" };
+  }
+  if (row.coincidenceCount > 0) {
+    return { text: "COINCIDENCIA", background: "#edf9f4", color: "#07563f" };
+  }
+  return { text: "0 COINCIDENCIAS", background: "#fff0ec", color: "#9f341e" };
+}
+
 export default function Home() {
   const [result, setResult] = useState<PredictionResponse | null>(null);
+  const [evaluation, setEvaluation] = useState<EvaluationResponse | null>(null);
   const [activeTab, setActiveTab] = useState("all");
   const [loading, setLoading] = useState(false);
+  const [evaluationLoading, setEvaluationLoading] = useState(false);
   const [error, setError] = useState("");
+  const [evaluationError, setEvaluationError] = useState("");
   const [selectedDate, setSelectedDate] = useState(currentDominicanDate);
 
   const visibleLotteries = useMemo(() => {
@@ -93,12 +368,58 @@ export default function Home() {
       : result.lotteries.filter((lottery) => lottery.id === activeTab);
   }, [activeTab, result]);
 
+  const visibleEvaluations = useMemo(() => {
+    if (!evaluation) return [];
+    return activeTab === "all"
+      ? evaluation.evaluations
+      : evaluation.evaluations.filter((item) => item.lottery === activeTab);
+  }, [activeTab, evaluation]);
+
+  const evaluationDates = useMemo(
+    () => [...new Set(visibleEvaluations.map((item) => item.date))].sort(),
+    [visibleEvaluations],
+  );
+
+  async function loadEvaluations(date: string) {
+    setEvaluationLoading(true);
+    setEvaluationError("");
+    try {
+      const response = await fetch("/api/evaluations/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetDate: date }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | EvaluationResponse
+        | { error?: string }
+        | null;
+
+      if (!response.ok) {
+        const message =
+          payload && "error" in payload && payload.error
+            ? payload.error
+            : `No fue posible actualizar el seguimiento (HTTP ${response.status}).`;
+        throw new Error(message);
+      }
+      if (!payload || "error" in payload) {
+        throw new Error("El servidor devolvió una respuesta de evaluación inválida.");
+      }
+      setEvaluation(payload);
+    } catch (caught) {
+      setEvaluationError(
+        caught instanceof Error ? caught.message : "No fue posible cargar el seguimiento real.",
+      );
+    } finally {
+      setEvaluationLoading(false);
+    }
+  }
+
   async function generatePredictions(date = selectedDate) {
     setLoading(true);
     setError("");
+    setEvaluation(null);
+    setEvaluationError("");
     try {
-      // Primero se cargan exclusivamente las tres semanas ISO históricas equivalentes.
-      // La propia semana objetivo no participa en STAT-V1.0.
       const syncResponse = await fetch("/api/admin/sync-history", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -139,6 +460,9 @@ export default function Home() {
       }
 
       setResult(payload);
+      if (payload.dataStatus === "complete") {
+        void loadEvaluations(date);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Ocurrió un error inesperado.");
     } finally {
@@ -148,7 +472,9 @@ export default function Home() {
 
   function clearScreen() {
     setResult(null);
+    setEvaluation(null);
     setError("");
+    setEvaluationError("");
     setActiveTab("all");
   }
 
@@ -308,7 +634,7 @@ export default function Home() {
 
               {visibleLotteries.map((lottery) => (
                 <div className="lotteryWeek" key={`${lottery.id}-week`}>
-                  <div className="lotteryWeekTitle" style={{ "--accent": lottery.accent } as React.CSSProperties}>
+                  <div className="lotteryWeekTitle" style={{ "--accent": lottery.accent } as CSSProperties}>
                     <span>{lottery.shortName}</span>
                     <b>Semana ISO {result.isoWeek} · {result.historicalYears.join(" · ")}</b>
                   </div>
@@ -340,7 +666,7 @@ export default function Home() {
 
             <div className="lotteryGrid">
               {visibleLotteries.map((lottery) => (
-                <article className="lotteryCard" key={lottery.id} style={{ "--accent": lottery.accent } as React.CSSProperties}>
+                <article className="lotteryCard" key={lottery.id} style={{ "--accent": lottery.accent } as CSSProperties}>
                   <div className="cardTop">
                     <div>
                       <span className="lotteryCode">{lottery.shortName}</span>
@@ -408,6 +734,147 @@ export default function Home() {
                 </article>
               ))}
             </div>
+
+            <section style={evaluationStyles.section} aria-labelledby="real-tracking-title">
+              <div style={evaluationStyles.header}>
+                <div>
+                  <span className="sectionKicker">SEGUIMIENTO REAL</span>
+                  <h3 id="real-tracking-title" style={evaluationStyles.title}>
+                    Resultado observado vs. snapshot congelado
+                  </h3>
+                </div>
+                <button
+                  style={evaluationStyles.refreshButton}
+                  onClick={() => void loadEvaluations(result.selectedDate)}
+                  disabled={evaluationLoading || result.dataStatus !== "complete"}
+                >
+                  {evaluationLoading ? "Actualizando…" : "Actualizar resultados reales"}
+                </button>
+              </div>
+
+              <div style={evaluationStyles.notice}>
+                {evaluation?.evaluations.some((item) => item.projectionKind === "retrospective_demo")
+                  ? "Demostración retrospectiva: esta semana fue congelada después de haber comenzado. Sirve para comprobar el proceso y la transparencia del sistema, no para afirmar rendimiento predictivo prospectivo."
+                  : "La evaluación utiliza únicamente los candidatos del snapshot congelado. Los resultados posteriores nunca recalculan ni modifican la proyección original."}
+              </div>
+
+              {evaluationError && <div className="errorBox" style={{ marginTop: 14 }}>{evaluationError}</div>}
+
+              {evaluationLoading && !evaluation && (
+                <div style={evaluationStyles.pending}>Consultando resultados reales confirmados…</div>
+              )}
+
+              {evaluation && (
+                <>
+                  <div style={evaluationStyles.summaryGrid}>
+                    <div style={evaluationStyles.summaryCard}>
+                      <b style={evaluationStyles.summaryValue}>{evaluation.summary.confirmed}</b>
+                      <span style={evaluationStyles.summaryLabel}>Evaluaciones confirmadas</span>
+                    </div>
+                    <div style={evaluationStyles.summaryCard}>
+                      <b style={{ ...evaluationStyles.summaryValue, color: "#07563f" }}>{evaluation.summary.withCoincidences}</b>
+                      <span style={evaluationStyles.summaryLabel}>Con 1 o más coincidencias diarias</span>
+                    </div>
+                    <div style={evaluationStyles.summaryCard}>
+                      <b style={{ ...evaluationStyles.summaryValue, color: "#9f341e" }}>{evaluation.summary.zeroCoincidences}</b>
+                      <span style={evaluationStyles.summaryLabel}>Con 0 coincidencias diarias</span>
+                    </div>
+                    <div style={evaluationStyles.summaryCard}>
+                      <b style={evaluationStyles.summaryValue}>{evaluation.summary.pending}</b>
+                      <span style={evaluationStyles.summaryLabel}>Resultados pendientes</span>
+                    </div>
+                    {evaluation.summary.reviewRequired > 0 && (
+                      <div style={evaluationStyles.summaryCard}>
+                        <b style={{ ...evaluationStyles.summaryValue, color: "#9f341e" }}>{evaluation.summary.reviewRequired}</b>
+                        <span style={evaluationStyles.summaryLabel}>Requieren revisión</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {evaluationDates.map((date) => {
+                    const rows = visibleEvaluations.filter((item) => item.date === date);
+                    const dayName = rows[0]?.day ?? "";
+                    return (
+                      <div style={evaluationStyles.dayBlock} key={date}>
+                        <div style={evaluationStyles.dayHeader}>
+                          <h4 style={evaluationStyles.dayTitle}>{dayName}</h4>
+                          <span style={evaluationStyles.dayDate}>{formatEvaluationDate(date)}</span>
+                        </div>
+                        <div style={evaluationStyles.cards}>
+                          {rows.map((row) => {
+                            const appearance = statusAppearance(row);
+                            return (
+                              <article style={evaluationStyles.card} key={`${row.predictionId}-${row.date}`}>
+                                <div style={evaluationStyles.cardTop}>
+                                  <span style={evaluationStyles.lottery}>{row.lotteryName}</span>
+                                  <span
+                                    style={{
+                                      ...evaluationStyles.status,
+                                      background: appearance.background,
+                                      color: appearance.color,
+                                    }}
+                                  >
+                                    {appearance.text}
+                                  </span>
+                                </div>
+
+                                <div style={evaluationStyles.label}>Candidatos diarios publicados</div>
+                                <div style={evaluationStyles.numberRow}>
+                                  {row.dailyCandidates.map((number) => (
+                                    <span style={evaluationStyles.number} key={`${row.date}-${row.lottery}-${number}`}>
+                                      {number}
+                                    </span>
+                                  ))}
+                                </div>
+
+                                <div style={evaluationStyles.label}>Resultado real</div>
+                                {row.result ? (
+                                  <div style={evaluationStyles.numberRow}>
+                                    {row.result.map((number, index) => (
+                                      <span style={evaluationStyles.resultNumber} key={`${row.date}-${row.lottery}-r-${index}`}>
+                                        {number}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div style={evaluationStyles.pending}>Resultado pendiente de confirmación</div>
+                                )}
+
+                                {row.status === "confirmed" && row.coincidenceCount === 0 && (
+                                  <div style={evaluationStyles.zero}>NINGUNA · 0 coincidencias</div>
+                                )}
+                                {row.status === "confirmed" && row.coincidenceCount > 0 && (
+                                  <div style={evaluationStyles.hit}>
+                                    {row.coincidences.map((match) => `${match.number} (P${match.position})`).join(" · ")} · {row.coincidenceCount} coincidencia{row.coincidenceCount === 1 ? "" : "s"}
+                                  </div>
+                                )}
+                                {row.status === "review_required" && (
+                                  <div style={evaluationStyles.zero}>{row.reviewNote ?? "La fuente cambió un resultado previamente confirmado."}</div>
+                                )}
+
+                                {row.status === "confirmed" && (
+                                  <div style={evaluationStyles.metrics}>
+                                    <span style={evaluationStyles.metric}>Hit semanal @5: {row.hitTop5 ? "SÍ" : "NO"}</span>
+                                    <span style={evaluationStyles.metric}>@10: {row.hitTop10 ? "SÍ" : "NO"}</span>
+                                    <span style={evaluationStyles.metric}>@15: {row.hitTop15 ? "SÍ" : "NO"}</span>
+                                  </div>
+                                )}
+
+                                <p style={evaluationStyles.footerNote}>{row.comparisonBasis}</p>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  <p style={evaluationStyles.footerNote}>
+                    Regla de evaluación: {evaluation.evaluationRule} La comparación diaria principal usa los 5 candidatos diarios congelados; Hit@5/@10/@15 semanal se muestra por separado.
+                  </p>
+                </>
+              )}
+            </section>
 
             <p className="generatedAt">
               Análisis generado el {new Date(result.generatedAt).toLocaleString("es-DO", { dateStyle: "long", timeStyle: "short" })}
