@@ -10,6 +10,7 @@ type LotteryPrediction = {
   candidates: Array<{ number: string; score: number; signal: string }>;
   dailyHotNumbers: string[];
   monthlyHotNumbers: string[];
+  weeklyHotNumbers: string[];
   weeklyCoincidences: Array<{
     day: string;
     date: string;
@@ -27,9 +28,19 @@ type LotteryPrediction = {
   hasSufficientData: boolean;
 };
 
+type HistoricalWeek = {
+  isoYear: number;
+  isoWeek: number;
+  available: boolean;
+  start: string | null;
+  end: string | null;
+  label: string;
+};
+
 type PredictionResponse = {
   generatedAt: string;
   selectedDate: string;
+  isoWeek: number;
   dataThrough: string;
   weekLabel: string;
   weekRange: string;
@@ -37,6 +48,7 @@ type PredictionResponse = {
   monthLabel: string;
   dayLabel: string;
   historicalYears: number[];
+  historicalWeeks: HistoricalWeek[];
   dataStatus: "complete" | "insufficient";
   dataStatusLabel: string;
   historicalDrawCount: number;
@@ -84,8 +96,9 @@ export default function Home() {
     setLoading(true);
     setError("");
     try {
-      // La sincronización actualiza la base disponible. Si la fuente todavía no
-      // publicó el sorteo, el análisis puede continuar con el último dato válido.
+      // La sincronización actualiza la base disponible. El motor de análisis usa
+      // exclusivamente las semanas históricas equivalentes, no resultados de la
+      // propia semana objetivo.
       await fetch("/api/admin/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -132,8 +145,8 @@ export default function Home() {
           <div className="eyebrow">ANÁLISIS HISTÓRICO · REPÚBLICA DOMINICANA</div>
           <h1>Decisiones con datos.<br /><span>Predicciones con contexto.</span></h1>
           <p className="heroCopy">
-            Compara los tres años anteriores por día, por mes y por semanas de
-            lunes a domingo para descubrir las señales estadísticas vigentes.
+            Compara la misma semana ISO de los tres años anteriores, de lunes a
+            domingo, para observar recurrencias históricas y generar candidatos.
           </p>
           <div className="heroActions">
             <button className="primaryButton" onClick={() => void generatePredictions(selectedDate)} disabled={loading}>
@@ -144,7 +157,9 @@ export default function Home() {
               Limpiar pantalla
             </button>
           </div>
-          <p className="finePrint">Análisis orientativo. Los sorteos son eventos aleatorios.</p>
+          <p className="finePrint">
+            Análisis estadístico orientativo. No garantiza premios; el uso de la información es decisión del usuario.
+          </p>
         </div>
 
         <aside className="weekCard">
@@ -153,7 +168,7 @@ export default function Home() {
           <span className="weekYear">{result?.targetYear ?? new Date().getFullYear()}</span>
           <div className="weekDivider" />
           <div className="yearsRow">
-            <span>BASE HISTÓRICA</span>
+            <span>{result ? `SEMANA ISO ${result.isoWeek}` : "BASE HISTÓRICA"}</span>
             <b>{result?.historicalYears.join(" · ") ?? "3 años anteriores"}</b>
           </div>
         </aside>
@@ -186,8 +201,8 @@ export default function Home() {
           }}
         >
           <div>
-            <label htmlFor="analysis-date">Calendario de coincidencias</label>
-            <p>Elige una fecha para consultar su semana completa y sus coincidencias históricas.</p>
+            <label htmlFor="analysis-date">Semana de referencia</label>
+            <p>Elige una fecha. El sistema localizará su semana ISO y la misma semana en los tres años anteriores.</p>
           </div>
           <div className="calendarControls">
             <input
@@ -210,7 +225,7 @@ export default function Home() {
               <div className="orbitCenter">✦</div>
             </div>
             <h3>Tu lectura semanal comienza aquí</h3>
-            <p>Genera el análisis para ver números calientes, candidatos principales y parejas recurrentes.</p>
+            <p>Genera el análisis para comparar la misma semana ISO de los tres años históricos.</p>
           </div>
         )}
 
@@ -218,7 +233,7 @@ export default function Home() {
           <div className="loadingState">
             <div className="loadingBars"><i /><i /><i /><i /></div>
             <h3>Procesando señales históricas</h3>
-            <p>Combinando mes, semana equivalente, día y posición…</p>
+            <p>Localizando la misma semana ISO en los tres años anteriores…</p>
           </div>
         )}
 
@@ -227,17 +242,24 @@ export default function Home() {
         {result && (
           <>
             <div className="summaryStrip">
-              <span><b>{result.weekLabel}</b> Semana de lunes a domingo</span>
-              <span><b>{result.dataThrough}</b> Último resultado confirmado</span>
-              <span><b>{result.historicalYears.join(" · ")}</b> Base histórica móvil</span>
-              <span><b>{result.dayLabel}</b> Análisis del día</span>
-              <span><b>{result.monthLabel}</b> Análisis del mes</span>
+              <span><b>Semana ISO {result.isoWeek}</b> Referencia oficial</span>
+              <span><b>{result.weekLabel}</b> Semana objetivo</span>
+              <span><b>{result.dataThrough}</b> Último dato histórico usado</span>
+              <span><b>{result.dayLabel}</b> Día seleccionado</span>
+            </div>
+
+            <div className="summaryStrip">
+              {result.historicalWeeks.map((week) => (
+                <span key={week.isoYear}>
+                  <b>{week.isoYear}</b> {week.label}
+                </span>
+              ))}
             </div>
 
             <div className={`dataNotice ${result.dataStatus === "complete" ? "dataComplete" : "dataInsufficient"}`}>
               <div>
                 <strong>{result.dataStatusLabel}</strong>
-                <span>{result.historicalDrawCount} sorteos históricos verificados en la base de datos.</span>
+                <span>{result.historicalDrawCount} sorteos de semanas equivalentes verificados en la base de datos.</span>
               </div>
               <b>{result.dataStatus === "complete" ? "DATOS REALES" : "SIN SIMULACIÓN"}</b>
             </div>
@@ -245,23 +267,23 @@ export default function Home() {
             <section className="coincidenceBoard" aria-labelledby="coincidence-title">
               <div className="coincidenceHeader">
                 <div>
-                  <span className="sectionKicker">SEGUIMIENTO SEMANAL</span>
-                  <h3 id="coincidence-title">Coincidencias por día</h3>
+                  <span className="sectionKicker">COMPARACIÓN HISTÓRICA</span>
+                  <h3 id="coincidence-title">Coincidencias por día equivalente</h3>
                 </div>
                 <span className="prototypeBadge">
-                  {result.dataStatus === "complete" ? "Datos reales" : "Datos insuficientes"}
+                  {result.dataStatus === "complete" ? `Semana ISO ${result.isoWeek}` : "Datos insuficientes"}
                 </span>
               </div>
               <p className="coincidenceIntro">
-                Cada número indica cuántos de los tres años históricos coincidieron.
-                La estrella señala una coincidencia reforzada por los calientes del día o del mes.
+                Cada número indica en cuántos de los tres años apareció en el mismo día de la misma semana ISO.
+                La estrella señala que además figura entre los números con mayor frecuencia semanal o diaria.
               </p>
 
               {visibleLotteries.map((lottery) => (
                 <div className="lotteryWeek" key={`${lottery.id}-week`}>
                   <div className="lotteryWeekTitle" style={{ "--accent": lottery.accent } as React.CSSProperties}>
                     <span>{lottery.shortName}</span>
-                    <b>{result.historicalYears.join(" · ")}</b>
+                    <b>ISO {result.isoWeek} · {result.historicalYears.join(" · ")}</b>
                   </div>
                   <div className="weekDays">
                     {lottery.weeklyCoincidences.map((day) => (
@@ -279,7 +301,7 @@ export default function Home() {
                             </div>
                           ))}
                           {day.numbers.length === 0 && (
-                            <span className="noVerifiedData">Sin coincidencias verificadas</span>
+                            <span className="noVerifiedData">Sin coincidencias históricas verificadas</span>
                           )}
                         </div>
                       </article>
@@ -297,13 +319,13 @@ export default function Home() {
                       <span className="lotteryCode">{lottery.shortName}</span>
                       <h3>{lottery.name}</h3>
                     </div>
-                    <span className="signalBadge">Señal activa</span>
+                    <span className="signalBadge">Semana ISO {result.isoWeek}</span>
                   </div>
 
                   <div className="cardSection">
                     <div className="sectionTitle">
                       <span>Candidatos principales</span>
-                      <small>Puntaje / 100</small>
+                      <small>Índice relativo / 100</small>
                     </div>
                     <div className="candidateList">
                       {lottery.candidates.map((candidate, index) => (
@@ -327,7 +349,20 @@ export default function Home() {
 
                   <div className="cardSection hotSection">
                     <div className="sectionTitle">
-                      <span>15 calientes del día</span>
+                      <span>15 fuertes de semanas equivalentes</span>
+                      <small>ISO {result.isoWeek} · {result.historicalYears.join("—")}</small>
+                    </div>
+                    <div className="ballCloud">
+                      {lottery.weeklyHotNumbers.map((number) => <Ball key={number} value={number} size="small" />)}
+                      {lottery.weeklyHotNumbers.length === 0 && (
+                        <span className="noCardData">Sin datos suficientes en las semanas equivalentes.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="cardSection hotSection">
+                    <div className="sectionTitle">
+                      <span>15 fuertes del día equivalente</span>
                       <small>{result.dayLabel}</small>
                     </div>
                     <div className="ballCloud">
@@ -341,7 +376,7 @@ export default function Home() {
                   <div className="cardSection monthHotSection">
                     <div className="sectionTitle">
                       <span>15 calientes del mes</span>
-                      <small>{result.historicalYears.join("—")}</small>
+                      <small>Señal complementaria · {result.historicalYears.join("—")}</small>
                     </div>
                     <div className="ballCloud">
                       {lottery.monthlyHotNumbers.map((number) => <Ball key={number} value={number} size="small" />)}
@@ -352,7 +387,7 @@ export default function Home() {
                   </div>
 
                   <div className="pairRow">
-                    <span>Parejas recurrentes</span>
+                    <span>Parejas recurrentes en semanas equivalentes</span>
                     <div>{lottery.pairs.map((pair) => <b key={pair}>{pair}</b>)}</div>
                     {lottery.pairs.length === 0 && <small>Sin parejas recurrentes verificadas.</small>}
                   </div>
