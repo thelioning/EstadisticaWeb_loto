@@ -1,19 +1,19 @@
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../../db";
-import { drawResults, lotteries, syncRuns } from "../../../../../db/schema";
+import { getDb } from "../../../../db";
+import { drawResults, lotteries, syncRuns } from "../../../../db/schema";
 import {
   calendarParts,
   fetchDrawsForDate,
   TARGET_LOTTERIES,
-} from "../../../../../lib/lottery-source";
+} from "../../../../lib/lottery-source";
 import {
   addUtcDays,
   formatIsoDate,
   isoWeekInfo,
   isoWeekRange,
   type IsoWeekRange,
-} from "../../../../../lib/iso-week";
+} from "../../../../lib/iso-week";
 
 function datesForRange(range: IsoWeekRange) {
   return Array.from({ length: 7 }, (_, index) =>
