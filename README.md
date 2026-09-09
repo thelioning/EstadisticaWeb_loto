@@ -1,197 +1,656 @@
-# Predictor Estadístico de Quinielas Dominicanas
+# Nexo Loto — laboratorio estadístico de quinielas dominicanas
 
-## 1. Descripción
+## 1. Propósito
 
-Aplicación web para recopilar, almacenar y analizar resultados históricos de tres sorteos dominicanos:
+Nexo Loto es una aplicación web para recopilar, almacenar y analizar resultados históricos de tres sorteos dominicanos:
 
 - Quiniela de la Lotería Nacional.
 - Quiniela Palé de Leidsa.
 - Quiniela Palé de Loteka.
 
-El sistema utilizará los resultados de los tres años anteriores al año activo para generar candidatos estadísticos correspondientes a la semana en curso.
+El objetivo del proyecto no es afirmar que los sorteos pueden predecirse. El objetivo es construir un laboratorio reproducible que permita comprobar si determinadas recurrencias históricas producen una ventaja medible fuera de muestra frente a una selección aleatoria y frente a métodos estadísticos más simples.
+
+La hipótesis nula del proyecto es:
+
+```text
+H0: el ranking estadístico no tiene una ventaja predictiva fuera de muestra
+    frente a una selección aleatoria comparable.
+```
+
+La hipótesis alternativa es:
+
+```text
+H1: el ranking estadístico mejora una o más métricas previamente definidas
+    sobre datos que no fueron usados para diseñar ni ajustar el método.
+```
+
+Ningún puntaje mostrado por la aplicación debe interpretarse como probabilidad de premio.
+
+## 2. Unidad de análisis
+
+El universo de números es:
+
+```text
+U = {00, 01, 02, ..., 99}
+```
+
+Cada sorteo almacena tres posiciones:
+
+```text
+P1 = primer número
+P2 = segundo número
+P3 = tercer número
+```
+
+Para cada lotería `l`, cada número `n ∈ U` recibe señales estadísticas calculadas exclusivamente con información permitida por la fecha de corte.
+
+La aplicación producirá:
+
+- un ranking completo de los 100 números por lotería;
+- cinco candidatos principales de la semana en la interfaz inicial;
+- los 15 números más frecuentes del mes;
+- los 15 números más fuertes para el día de la semana seleccionado;
+- información sobre posición, coincidencias y parejas recurrentes;
+- datos suficientes para medir posteriormente el rendimiento real del método.
+
+El ranking completo debe conservarse aunque la interfaz muestre solamente una parte.
+
+## 3. Periodo objetivo y fecha de corte
+
+La semana de análisis es de **lunes a sábado**.
+
+Dada una fecha seleccionada `d`, se obtiene la semana que la contiene:
+
+```text
+W(d) = lunes de esa semana ... sábado de esa semana
+```
+
+Se define:
+
+```text
+Y = año del lunes de W(d)
+M = mes del lunes de W(d)
+H = {Y-3, Y-2, Y-1}
+```
 
 Ejemplo:
 
 ```text
-Datos históricos: 2023 + 2024 + 2025
-Periodo objetivo: semana activa de 2026
+Semana objetivo: 27 julio 2026 — 1 agosto 2026
+Y = 2026
+M = julio
+H = {2023, 2024, 2025}
 ```
 
-La aplicación no afirmará que puede garantizar resultados. Presentará frecuencias, coincidencias, tendencias y candidatos basados únicamente en datos históricos.
+### 3.1 Corte temporal
 
-## 2. Objetivo general
-
-Construir una aplicación que permita al usuario presionar un botón y obtener un análisis estadístico de las tres loterías para la semana activa, utilizando:
-
-- Los números más frecuentes del mes equivalente en los tres años anteriores.
-- Las semanas equivalentes de esos años.
-- El día de la semana.
-- La posición del número en el sorteo.
-- Las coincidencias entre las tres loterías.
-- Los resultados recientes disponibles antes de generar la predicción.
-
-## 3. Periodos históricos y semana objetivo
-
-La semana activa se considera de lunes a sábado. El usuario generará normalmente sus candidatos temprano el lunes, antes de los sorteos de esa semana.
-
-Ejemplo para la última semana de julio de 2026:
+La fecha de corte del modelo semanal es:
 
 ```text
-Histórico 2023: lunes 31 de julio – sábado 5 de agosto
-Histórico 2024: lunes 29 de julio – sábado 3 de agosto
-Histórico 2025: lunes 28 de julio – sábado 2 de agosto
-
-Semana objetivo 2026: lunes 27 de julio – sábado 1 de agosto
+C = lunes de la semana objetivo a las 00:00:00
+    en America/Santo_Domingo
 ```
 
-Las semanas históricas equivalentes alimentan el análisis. La semana de 2026 es el periodo que se intenta analizar o predecir.
+Ningún dato con fecha/hora `>= C` puede utilizarse para producir esa predicción semanal.
 
-## 4. Análisis mensual
+Esto se aplica también cuando el usuario consulta una semana histórica después de que sus resultados ya se conocen. El sistema debe reconstruir lo que habría sabido antes de comenzar esa semana.
 
-Para el mes activo se analizarán todos los resultados del mismo mes durante los tres años históricos.
+Los resultados de la propia semana objetivo solo se utilizarán posteriormente para evaluar la predicción.
+
+## 4. Años históricos
+
+El modelo utiliza los tres años calendario inmediatamente anteriores al año objetivo:
+
+```text
+H(Y) = {Y-3, Y-2, Y-1}
+```
+
+Para una predicción de 2026:
+
+```text
+2023 + 2024 + 2025 → 2026
+```
+
+Para un backtest de 2025:
+
+```text
+2022 + 2023 + 2024 → 2025
+```
+
+Por esta razón, la base histórica necesaria para validar 2025 debe comenzar **como mínimo el 1 de enero de 2022**. Importar solamente desde 2023 permite trabajar con 2026, pero no permite realizar correctamente el backtest de 2025 planteado en este proyecto.
+
+## 5. Definición exacta de semana histórica equivalente
+
+No se utilizará el número de semana ISO como definición principal. Tampoco se comparará simplemente el mismo día y mes de años anteriores.
+
+La semana equivalente se define por la **posición relativa del lunes dentro del mismo mes**.
+
+Para el mes objetivo `M` del año `Y`, sea:
+
+```text
+L_Y(M) = lista ordenada de todos los lunes del mes M
+K_Y    = cantidad de lunes del mes M
+k_Y    = posición del lunes objetivo dentro de L_Y(M)
+```
+
+Se calcula su posición relativa:
+
+```text
+q = (k_Y - 1) / (K_Y - 1)
+```
+
+Si por alguna razón `K_Y = 1`, se define `q = 0`.
+
+Para cada año histórico `h`, sea `K_h` la cantidad de lunes del mismo mes. La posición equivalente es:
+
+```text
+k_h = 1 + round(q × (K_h - 1))
+```
+
+La semana histórica equivalente de ese año comienza en el lunes `k_h` y termina el sábado siguiente. Si el sábado cae en el mes siguiente, no se recorta la semana.
+
+### Ejemplo: última semana de julio de 2026
+
+El 27 de julio de 2026 es el último lunes de julio. Su posición relativa es el final del mes (`q = 1`). Por tanto se selecciona el último lunes de julio de cada año histórico:
+
+```text
+2023: lunes 31 julio — sábado 5 agosto
+2024: lunes 29 julio — sábado 3 agosto
+2025: lunes 28 julio — sábado 2 agosto
+2026: lunes 27 julio — sábado 1 agosto  ← objetivo
+```
+
+Esta regla queda fijada para `STAT-V1.0`; cualquier cambio posterior requiere una nueva versión del método.
+
+## 6. Normalización de las señales
+
+Las señales tienen escalas diferentes. Antes de combinarlas se transformarán a un índice relativo de `0` a `100`.
+
+Para una señal cruda `F_j(n)` se ordenan los 100 números de mayor a menor. Los empates reciben el rango promedio.
+
+Sea `r_j(n)` el rango del número `n`, donde el mejor rango es `1` y el peor `100`:
+
+```text
+S_j(n) = 100 × (100 - r_j(n)) / 99
+```
+
+Interpretación:
+
+```text
+100 = mejor posición relativa para esa señal
+ 50 = posición aproximadamente central
+  0 = peor posición relativa
+```
+
+Si los 100 números empatan exactamente, todos reciben `50`.
+
+Estos valores son índices de ranking. **No son probabilidades.**
+
+## 7. Señales estadísticas de STAT-V1.0
+
+### 7.1 Frecuencia mensual
+
+Para cada lotería `l` y número `n`:
+
+```text
+F_mes(l,n) = cantidad total de apariciones de n
+             en P1, P2 o P3
+             durante el mes M
+             de los tres años H
+```
 
 Ejemplo para julio:
 
 ```text
-Julio 2023: 31 días × 3 posiciones = 93 números
-Julio 2024: 31 días × 3 posiciones = 93 números
-Julio 2025: 31 días × 3 posiciones = 93 números
-Total: 279 observaciones por lotería
+julio 2023 + julio 2024 + julio 2025
 ```
 
-Con esos resultados se calcularán los 15 números más frecuentes del mes, denominados en la interfaz como **números calientes del mes**.
+La normalización definida en la sección 6 produce:
 
-La frecuencia histórica no implica que un número tenga garantizada una mayor probabilidad matemática en un sorteo independiente. Representa únicamente fuerza o recurrencia dentro del modelo estadístico de la aplicación.
+```text
+S_mes(l,n)
+```
 
-## 5. Flujo del usuario
+Los **15 calientes del mes** son los 15 mayores valores de `F_mes`, no los 15 mayores puntajes finales del modelo.
+
+### 7.2 Frecuencia en semanas equivalentes
+
+Sea `W_h` la semana equivalente del año histórico `h` calculada mediante la sección 5:
+
+```text
+F_semana(l,n) = número de apariciones de n
+                en P1, P2 o P3
+                dentro de W_(Y-3), W_(Y-2), W_(Y-1)
+```
+
+Su índice normalizado es:
+
+```text
+S_semana(l,n)
+```
+
+Esta señal tiene una muestra pequeña. Debe conservarse porque forma parte de la hipótesis que se quiere probar, pero su utilidad se decidirá mediante backtesting, no por intuición.
+
+### 7.3 Frecuencia por día de la semana
+
+Para cada día `d ∈ {lunes, martes, miércoles, jueves, viernes, sábado}`:
+
+```text
+F_dia(l,n,d) = cantidad de apariciones de n
+               en P1, P2 o P3
+               en todos los sorteos del día d
+               durante los tres años H
+```
+
+Cada día se normaliza por separado:
+
+```text
+S_dia(l,n,d)
+```
+
+Los **15 calientes del día** se obtienen a partir de `F_dia` para el día seleccionado.
+
+El domingo queda fuera del modelo semanal `STAT-V1.0`.
+
+### 7.4 Frecuencia por posición
+
+Para cada posición `p ∈ {P1,P2,P3}`:
+
+```text
+F_pos(l,n,p) = cantidad de veces que n apareció exactamente
+               en la posición p durante los tres años H
+```
+
+Se calcula un índice independiente para cada posición:
+
+```text
+S_pos(l,n,P1)
+S_pos(l,n,P2)
+S_pos(l,n,P3)
+```
+
+El componente de posición utilizado por el ranking semanal será:
+
+```text
+S_posicion(l,n) = max(
+  S_pos(l,n,P1),
+  S_pos(l,n,P2),
+  S_pos(l,n,P3)
+)
+```
+
+La posición que produce ese máximo se registra como **posición históricamente más fuerte**. Si existe empate, se informan las posiciones empatadas y no se inventa una preferencia.
+
+### 7.5 Soporte entre loterías
+
+La coincidencia entre loterías utilizada en el puntaje no será una simple coincidencia visual del mismo día, porque esa señal es demasiado escasa para funcionar de forma estable.
+
+Primero se define para cada lotería `g`:
+
+```text
+B_g(n) = (S_mes(g,n) + S_semana(g,n)) / 2
+```
+
+Para una lotería objetivo `l`, el soporte de las otras dos loterías es:
+
+```text
+S_coincidencia(l,n) = promedio de B_g(n)
+                      para todas las loterías g != l
+```
+
+Por ejemplo, el soporte externo de un número de Leidsa procede de Nacional y Loteka.
+
+Las coincidencias literales del mismo número entre dos o tres loterías en una fecha histórica se conservarán como estadística descriptiva independiente, pero tendrán peso `0` en `STAT-V1.0` hasta demostrar utilidad fuera de muestra.
+
+### 7.6 Recencia
+
+Para cada lotería se toman los últimos `R = 30` sorteos completos disponibles estrictamente antes de la fecha de corte `C`:
+
+```text
+F_reciente(l,n) = cantidad de apariciones de n
+                  en P1, P2 o P3
+                  dentro de los últimos 30 sorteos
+                  anteriores a C
+```
+
+Su índice normalizado es:
+
+```text
+S_reciente(l,n)
+```
+
+El valor `R = 30` queda fijado en `STAT-V1.0`. No puede cambiarse después de observar el resultado del backtest sin crear una nueva versión del método.
+
+### 7.7 Parejas recurrentes
+
+Para cada sorteo se forman las parejas no ordenadas de los tres números:
+
+```text
+{P1,P2}, {P1,P3}, {P2,P3}
+```
+
+Las parejas repetidas pueden mostrarse como información exploratoria, principalmente para el mes objetivo y las semanas equivalentes.
+
+En `STAT-V1.0` las parejas **no modifican el puntaje de candidatos**. Su peso es `0`. Solo se incorporarán a una versión posterior si demuestran utilidad fuera de muestra.
+
+## 8. Puntaje diario y semanal
+
+### 8.1 Puntaje diario
+
+Para cada día `d` de lunes a sábado:
+
+```text
+S_diario(l,n,d) =
+    [ S_mes(l,n)
+    + S_semana(l,n)
+    + S_dia(l,n,d)
+    + S_posicion(l,n)
+    + S_coincidencia(l,n)
+    + S_reciente(l,n) ] / 6
+```
+
+Los seis componentes tienen inicialmente el mismo peso:
+
+```text
+peso = 1/6 ≈ 0.1666667
+```
+
+No se elegirán pesos distintos antes del primer backtest. El uso de pesos iguales evita introducir preferencias subjetivas sin evidencia.
+
+### 8.2 Puntaje semanal
+
+El puntaje principal mostrado en la tarjeta de cada lotería será el promedio de los seis puntajes diarios:
+
+```text
+S_semanal(l,n) = promedio(
+  S_diario(l,n,lunes),
+  S_diario(l,n,martes),
+  S_diario(l,n,miércoles),
+  S_diario(l,n,jueves),
+  S_diario(l,n,viernes),
+  S_diario(l,n,sábado)
+)
+```
+
+La aplicación conserva el ranking completo de `00` a `99` según `S_semanal`.
+
+### 8.3 Candidatos principales
+
+La interfaz inicial mostrará los primeros **5 candidatos** de cada lotería.
+
+Para investigación también se medirán los cortes:
+
+```text
+Top 5
+Top 10
+Top 15
+```
+
+El desempate del ranking semanal será determinista:
+
+1. mayor `S_semanal`;
+2. mayor `S_semana`;
+3. mayor `S_mes`;
+4. mayor `S_reciente`;
+5. menor valor numérico (`00` antes que `01`, etc.).
+
+No se utilizarán desempates aleatorios en el modelo.
+
+## 9. Explicación de cada candidato
+
+Cada candidato guardado debe poder explicar su resultado. Como mínimo se conservarán:
+
+```text
+number
+ranking
+score_semanal
+score_mensual
+score_semana_equivalente
+score_dia
+score_posicion
+score_coincidencia
+score_recencia
+posicion_historicamente_mas_fuerte
+dia_historicamente_mas_fuerte
+method_version
+data_available_through
+```
+
+La interfaz puede resumir estos datos, pero la base debe conservarlos para auditoría y backtesting.
+
+## 10. Congelamiento de predicciones y prevención de fuga de información
+
+Una predicción generada debe ser inmutable respecto a resultados posteriores.
+
+Debe guardar:
+
+```text
+week_start
+week_end
+generated_at
+data_available_through
+historical_years
+method_version
+method_parameters
+ranking completo
+```
+
+Reglas:
+
+- ningún resultado de la semana objetivo puede participar en su propia predicción;
+- una consulta histórica debe reconstruir la información disponible antes de esa semana;
+- una sincronización posterior no puede recalcular silenciosamente una predicción ya guardada;
+- cambiar pesos, ventanas, reglas de semana equivalente o desempates obliga a crear una nueva versión del método;
+- el frontend no debe sincronizar resultados de la semana objetivo antes de generar un backtest de esa semana.
+
+## 11. Calidad mínima de datos
+
+No se generarán candidatos simulados para rellenar huecos.
+
+Cada lotería debe tener configurado su calendario esperado de sorteos. La aplicación debe calcular una razón de completitud:
+
+```text
+completitud = sorteos disponibles / sorteos esperados
+```
+
+Antes de declarar un análisis como completo se requiere:
+
+- presencia de los tres años históricos;
+- semanas equivalentes completas según el calendario de la lotería;
+- al menos 95 % de completitud en las ventanas históricas amplias usadas por mes, día y posición;
+- 30 sorteos válidos para la señal de recencia.
+
+Si no se cumple, la interfaz debe mostrar **datos insuficientes** y especificar qué ventana está incompleta.
+
+## 12. Backtesting
+
+### 12.1 Primera prueba fuera de muestra
+
+El primer experimento formal será:
+
+```text
+Datos usados por el modelo: 2022 + 2023 + 2024
+Periodo objetivo:          semanas de 2025
+Método:                    STAT-V1.0
+```
+
+Para cada semana de 2025 se reconstruirá la predicción utilizando únicamente información disponible antes de las `00:00` del lunes correspondiente.
+
+### 12.2 Baselines
+
+El método se comparará como mínimo con:
+
+**Baseline A — selección aleatoria**
+
+- selección uniforme sin repetición dentro de `00` a `99`;
+- mismo número de candidatos que el método;
+- simulación reproducible con semilla registrada;
+- 10 000 repeticiones del backtest para estimar su distribución.
+
+**Baseline B — frecuencia mensual solamente**
+
+- ranking formado exclusivamente por `F_mes`;
+- mismos cortes Top 5, Top 10 y Top 15.
+
+Comparar con la frecuencia mensual permite saber si el modelo compuesto añade valor o simplemente reproduce el comportamiento de los números calientes del mes.
+
+### 12.3 Métrica primaria
+
+Para cada sorteo real `t` y un conjunto Top 5 `K_t`:
+
+```text
+Hit@5(t) = 1 si al menos uno de P1, P2 o P3 pertenece a K_t
+           0 en caso contrario
+```
+
+La métrica primaria será la media de `Hit@5` sobre todos los sorteos evaluables de las tres loterías durante el periodo de prueba.
+
+### 12.4 Métricas secundarias
+
+También se registrarán:
+
+```text
+Hit@10
+Hit@15
+cantidad de posiciones acertadas por sorteo
+rango medio de los números realmente sorteados
+resultados por lotería
+resultados por día de la semana
+resultados por posición
+resultados por mes
+rendimiento de cada señal por separado
+```
+
+El proyecto debe distinguir una coincidencia en cualquier posición de un acierto de posición exacta.
+
+### 12.5 Intervalos de incertidumbre
+
+Para comparar `STAT-V1.0` con los baselines se utilizará bootstrap pareado por semana:
+
+```text
+10 000 remuestreos
+unidad de remuestreo: semana completa
+intervalo: 95 %
+```
+
+Remuestrear por semana evita tratar como totalmente independientes observaciones que pertenecen al mismo bloque temporal.
+
+La afirmación de ventaja predictiva se reservará para la métrica primaria y solo si la diferencia fuera de muestra es consistente con el criterio estadístico predefinido. Las métricas secundarias se considerarán exploratorias salvo que se preregistre otra prueba.
+
+## 13. Política contra sobreajuste
+
+`STAT-V1.0` queda definido antes de observar su resultado formal de 2025.
+
+Después de ejecutar el backtest:
+
+- si se cambian pesos, ventanas o señales usando los resultados de 2025, ese año pasa a ser conjunto de desarrollo;
+- la versión modificada no puede presentarse como validada con los mismos datos que se usaron para ajustarla;
+- una versión ajustada con 2025 deberá evaluarse con datos posteriores no utilizados en el ajuste, por ejemplo datos de 2026 obtenidos de forma prospectiva.
+
+No se incorporará aprendizaje automático hasta disponer de suficiente historial y un protocolo separado de entrenamiento, validación y prueba.
+
+## 14. Flujo del usuario
 
 1. El usuario abre la aplicación.
-2. La pantalla aparece sin predicciones.
-3. El usuario presiona **Generar predicciones**.
-4. El frontend solicita el análisis al backend.
-5. El backend identifica la fecha, el mes y la semana activa en la zona horaria de Santo Domingo.
-6. El sistema consulta los datos almacenados, calcula o recupera las estadísticas y devuelve los candidatos.
-7. El frontend presenta una tarjeta separada para cada lotería.
-8. El usuario puede presionar **Limpiar pantalla** para ocultar los resultados.
+2. La pantalla aparece **sin predicciones ni análisis generado**.
+3. El usuario selecciona la fecha de referencia si desea cambiarla.
+4. El usuario presiona **Generar predicciones**.
+5. El backend determina semana objetivo, corte temporal y años históricos.
+6. El motor valida la completitud de datos.
+7. Se calculan las señales y el ranking.
+8. La predicción se guarda con versión y fecha de corte.
+9. El frontend presenta una tarjeta separada para cada lotería.
+10. **Limpiar pantalla** oculta el resultado sin eliminar datos persistentes.
 
-El botón **Limpiar pantalla** no debe eliminar resultados históricos, estadísticas ni predicciones guardadas. Solamente restablece el estado visual del frontend.
+La aplicación no debe ejecutar `generatePredictions()` automáticamente al montar la página.
 
-## 6. Funcionalidades principales
+## 15. Información mostrada por lotería
 
-### 6.1 Recopilación
+La tarjeta debe poder mostrar:
 
-- Importar resultados históricos desde el 1 de enero de 2023.
-- Identificar cada lotería mediante un identificador externo estable.
-- Evitar registros duplicados.
-- Registrar la fuente y la fecha de recopilación.
-- Reintentar consultas fallidas.
-- Permitir corregir resultados modificados por la fuente.
+- cinco candidatos principales de la semana;
+- puntaje relativo de cada candidato;
+- desglose de señales;
+- 15 calientes del mes;
+- 15 calientes del día seleccionado;
+- posición históricamente más fuerte;
+- coincidencias históricas entre loterías;
+- parejas recurrentes como información exploratoria;
+- periodo histórico utilizado;
+- fecha de corte de datos;
+- versión del método;
+- estado de completitud.
 
-### 6.2 Actualización diaria
+Debe existir un aviso visible indicando que el análisis no garantiza resultados y que los sorteos deben tratarse como eventos aleatorios salvo evidencia empírica reproducible en contrario.
 
-- Consultar únicamente fechas recientes, normalmente ayer y hoy.
-- Ejecutar varias comprobaciones según los horarios de los sorteos.
-- Registrar el estado de cada sincronización.
-- Mantener disponible la información local aunque la fuente externa falle temporalmente.
+## 16. Fuente de resultados
 
-### 6.3 Estadísticas
-
-- Frecuencia mensual de los números `00` a `99`.
-- Quince números más frecuentes del mes.
-- Frecuencia en semanas históricas equivalentes.
-- Frecuencia por día de la semana.
-- Frecuencia por primera, segunda y tercera posición.
-- Coincidencias entre las tres loterías.
-- Parejas o combinaciones recurrentes.
-- Apariciones recientes.
-
-### 6.4 Predicciones
-
-- Generar candidatos separados por lotería.
-- Asignar un puntaje explicable a cada candidato.
-- Guardar la fecha y hora de generación.
-- Guardar hasta qué fecha había datos disponibles.
-- Guardar la versión del método y sus pesos.
-- Impedir que resultados posteriores alteren retroactivamente una predicción ya generada.
-- Comparar posteriormente los candidatos con los resultados reales.
-
-## 7. Modelo inicial de puntuación
-
-Cada número recibirá puntos según varias señales. Los pesos deben permanecer configurables.
-
-Ejemplo conceptual:
+Fuente automatizada observada actualmente:
 
 ```text
-Puntaje =
-    frecuencia_mensual          × peso_mensual
-  + frecuencia_semana_equiv     × peso_semanal
-  + frecuencia_dia_semana       × peso_dia
-  + frecuencia_por_posicion     × peso_posicion
-  + coincidencias_loterias      × peso_coincidencia
-  + recurrencia_parejas         × peso_parejas
-  + señal_reciente              × peso_recencia
+https://api.loteriasdominicanas.com/dominicana/sessions
 ```
 
-La primera versión debe priorizar un modelo sencillo, reproducible y verificable. No se debe incorporar aprendizaje automático hasta disponer de pruebas retrospectivas suficientes.
-
-## 8. Fuentes de datos
-
-Fuente inicial para automatización:
-
-- `https://loteriasdominicanas.com/`
-- Endpoint observado: `https://api.loteriasdominicanas.com/dominicana/sessions`
-
-Formato de consulta observado:
+Formato observado:
 
 ```text
-GET /dominicana/sessions?date=2026-07-08T04%3A00%3A00.000Z&limit=3
+GET /dominicana/sessions?date=YYYY-MM-DDT04:00:00.000Z&limit=3
 ```
 
-Fuente oficial de verificación para Leidsa:
-
-- `https://www.leidsa.com/results`
-
-Los endpoints observados no deben tratarse como una API pública garantizada. Pueden cambiar sin aviso. El acceso debe estar encapsulado en un adaptador del backend para poder sustituir la fuente sin modificar el resto del sistema.
-
-Antes de publicar una aplicación comercial, se deben revisar los términos de uso y permisos de reutilización de datos de cada fuente.
-
-## 9. Arquitectura
+Los identificadores externos actualmente configurados son:
 
 ```text
-Fuente externa de resultados
-             │
-             ▼
-Recolector y normalizador
-             │
-             ▼
-Base de datos PostgreSQL
-             │
-             ├──────────────► Estadísticas precalculadas
-             │
-             ▼
-Motor de puntuación y predicciones
-             │
-             ▼
-API interna del proyecto
-             │
-             ▼
-Frontend web
+Nacional: 6966a6d1ea7015c3b8a3d482
+Leidsa:   6966a6d1ea7015c3b8a3d453
+Loteka:   6966a6d2ea7015c3b8a3d4d7
 ```
 
-### Tecnologías recomendadas
+El endpoint observado no se considera una API pública garantizada. El acceso debe permanecer encapsulado en un adaptador sustituible.
 
-- Frontend: Next.js con React y TypeScript.
-- Backend: API de Next.js o servicio Node.js con TypeScript.
-- Base de datos: PostgreSQL.
-- ORM: Prisma.
-- Validación: Zod.
-- Tareas programadas: cron del proveedor o trabajador programado.
-- Pruebas: Vitest.
-- Zona horaria: `America/Santo_Domingo`.
+Antes de una publicación comercial se deben revisar los términos de uso y los permisos de reutilización de los datos.
 
-Para una primera versión puede utilizarse un único proyecto Next.js con frontend, API y tareas de recopilación bien separadas por módulos. Si el sistema crece, el recolector puede extraerse a un servicio independiente.
+## 17. Arquitectura real del repositorio
 
-## 10. Modelo de datos
+El proyecto actual utiliza:
+
+- Next.js 16.
+- React 19.
+- TypeScript.
+- Vinext/Vite.
+- Cloudflare Workers.
+- Cloudflare D1 / SQLite.
+- Drizzle ORM.
+- Wrangler.
+- zona horaria `America/Santo_Domingo`.
+
+Arquitectura:
+
+```text
+Fuente externa
+      │
+      ▼
+Adaptador y normalizador
+      │
+      ▼
+Cloudflare D1
+      │
+      ├── resultados históricos
+      ├── ejecuciones de sincronización
+      └── predicciones congeladas
+      │
+      ▼
+Motor estadístico versionado
+      │
+      ▼
+API interna Next.js
+      │
+      ▼
+Frontend React
+```
+
+El frontend nunca debe consumir directamente la fuente externa.
+
+## 18. Modelo de datos base
 
 ### `lotteries`
 
@@ -227,13 +686,13 @@ collected_at
 updated_at
 ```
 
-Restricción recomendada:
+Restricción mínima:
 
 ```text
 UNIQUE(lottery_id, external_result_id)
 ```
 
-También debe existir una restricción o validación que evite dos resultados incompatibles para la misma lotería y fecha.
+También debe impedirse almacenar dos resultados incompatibles para la misma lotería y fecha.
 
 ### `sync_runs`
 
@@ -248,37 +707,6 @@ records_updated
 error_message
 started_at
 finished_at
-```
-
-### `monthly_statistics`
-
-```text
-id
-lottery_id
-target_month
-historical_years
-number
-frequency_total
-frequency_first
-frequency_second
-frequency_third
-ranking
-calculated_at
-```
-
-### `weekly_statistics`
-
-```text
-id
-lottery_id
-target_week_start
-target_week_end
-historical_years
-number
-frequency
-score
-details
-calculated_at
 ```
 
 ### `predictions`
@@ -312,205 +740,79 @@ recency_score
 explanation
 ```
 
-## 11. API interna prevista
+El modelo puede ampliarse posteriormente con tablas específicas de backtesting, pero el resultado de una predicción debe permanecer auditable e inmutable.
+
+## 19. API objetivo
 
 ```text
 POST /api/predictions/generate
 GET  /api/predictions/current
 GET  /api/predictions/:id
-GET  /api/statistics/monthly
-GET  /api/statistics/weekly
 GET  /api/results
 POST /api/admin/sync
 GET  /api/admin/sync/status
+POST /api/backtests/run
+GET  /api/backtests/:id
 ```
 
-El frontend nunca debe depender directamente de la fuente externa. Debe consumir exclusivamente la API propia.
+Las rutas de backtesting deben ejecutar exactamente el mismo motor que las predicciones reales; no debe existir una segunda implementación con reglas diferentes.
 
-## 12. Interfaz principal
+## 20. Estado actual y diferencias pendientes
 
-### Encabezado
+El repositorio ya contiene:
 
-- Nombre de la aplicación.
-- Fecha actual.
-- Semana activa.
-- Años históricos utilizados.
+- interfaz principal;
+- adaptador para las tres loterías;
+- normalización de resultados;
+- persistencia en D1 mediante Drizzle;
+- sincronización por fecha;
+- un generador inicial de estadísticas.
 
-### Acciones
+El generador actual todavía **no implementa `STAT-V1.0`**. Actualmente combina frecuencias del mismo día del mes y del mes completo y asigna puntajes principalmente por posición del ranking. Ese código debe considerarse prototipo y sustituirse por el motor especificado en este documento.
 
-- Botón **Generar predicciones**.
-- Botón **Limpiar pantalla**.
+También están pendientes:
 
-### Estados
+- implementar la regla formal de semanas equivalentes;
+- cambiar toda la lógica semanal a lunes-sábado;
+- guardar realmente las predicciones y el ranking completo;
+- evitar sincronizaciones de la semana objetivo durante backtesting;
+- importar 2022 para permitir la prueba formal de 2025;
+- implementar el backtesting y los baselines;
+- actualizar las pruebas automatizadas del repositorio para que validen el producto actual y no el starter inicial.
 
-- Pantalla inicial vacía.
-- Cargando datos.
-- Predicción generada.
-- Datos insuficientes.
-- Fuente desactualizada.
-- Error de comunicación.
+## 21. Criterios de aceptación de STAT-V1.0
 
-### Tarjeta por lotería
+La versión se considerará implementada cuando:
 
-- Nombre de la lotería.
-- Quince números calientes del mes.
-- Candidatos principales de la semana.
-- Puntaje de cada número.
-- Motivos principales de su clasificación.
-- Parejas destacadas.
-- Fecha y hora de generación.
-- Datos disponibles hasta una fecha determinada.
+- la pantalla abra vacía;
+- la generación ocurra solamente por acción del usuario;
+- existan datos históricos desde 2022 para el primer backtest;
+- se calcule correctamente la semana objetivo lunes-sábado;
+- la regla de semana equivalente reproduzca los casos documentados;
+- se calculen las seis señales definidas;
+- cada señal use ranking normalizado de 0 a 100;
+- los pesos de `STAT-V1.0` sean exactamente `1/6`;
+- se conserve el ranking completo de 100 números;
+- se muestren cinco candidatos principales;
+- cada candidato tenga desglose explicable;
+- las predicciones se congelen con fecha de corte y versión;
+- no exista fuga de información futura;
+- pueda ejecutarse el backtest 2025 usando 2022-2024;
+- se compare contra selección aleatoria y frecuencia mensual;
+- los resultados del laboratorio puedan reproducirse con la misma versión y los mismos datos.
 
-### Aviso
+## 22. Alcance excluido
 
-La interfaz debe indicar que los resultados son análisis estadísticos y no representan una garantía de premio.
+Quedan fuera de `STAT-V1.0`:
 
-## 13. Ruta de desarrollo
+- apuestas o pagos;
+- automatización de jugadas;
+- garantías de resultados;
+- modificación de pesos después de observar el holdout sin cambiar de versión;
+- aprendizaje automático;
+- aplicaciones móviles nativas;
+- incorporación de loterías adicionales;
+- uso de parejas recurrentes como señal ponderada;
+- uso de coincidencias literales del mismo día como señal ponderada.
 
-### Fase 1 — Inicialización
-
-- Crear el proyecto.
-- Configurar TypeScript, formato y validación.
-- Configurar PostgreSQL y Prisma.
-- Definir variables de entorno.
-- Crear estructura modular.
-
-### Fase 2 — Adaptador de datos
-
-- Confirmar los identificadores externos de las tres loterías.
-- Implementar el cliente del endpoint.
-- Normalizar respuestas.
-- Manejar límites, errores y reintentos.
-- Agregar pruebas con respuestas guardadas.
-
-### Fase 3 — Importación histórica
-
-- Importar desde el 1 de enero de 2023.
-- Procesar fechas en lotes controlados.
-- Guardar avance reanudable.
-- Evitar duplicados.
-- Generar un informe de integridad.
-
-### Fase 4 — Actualización incremental
-
-- Consultar ayer y hoy.
-- Programar ejecuciones posteriores a los sorteos.
-- Actualizar resultados corregidos.
-- Registrar alertas y fallos.
-
-### Fase 5 — Motor estadístico
-
-- Calcular frecuencias mensuales.
-- Obtener los 15 números calientes.
-- Calcular semanas equivalentes.
-- Analizar días y posiciones.
-- Detectar coincidencias.
-- Calcular puntajes explicables.
-
-### Fase 6 — Predicciones
-
-- Generar candidatos bajo demanda.
-- Congelar cada ejecución.
-- Guardar parámetros y versión.
-- Evitar información futura en el cálculo.
-- Medir aciertos posteriormente.
-
-### Fase 7 — Frontend
-
-- Implementar pantalla principal.
-- Implementar ambos botones.
-- Crear tarjetas por lotería.
-- Mostrar estados de carga y error.
-- Adaptar la interfaz a teléfonos.
-
-### Fase 8 — Validación retrospectiva
-
-Antes de evaluar el método con 2026, se debe realizar backtesting:
-
-```text
-Entrenamiento histórico: 2022 + 2023 + 2024
-Periodo simulado: semanas de 2025
-```
-
-Para cada lunes simulado solo se podrán utilizar resultados disponibles hasta el domingo anterior. Esto evita fuga de información futura.
-
-Métricas sugeridas:
-
-- Cantidad de candidatos generados.
-- Aciertos semanales.
-- Aciertos por posición.
-- Aciertos por lotería.
-- Precisión de los primeros 5, 10 y 15 candidatos.
-- Comparación contra una selección aleatoria.
-- Rendimiento por versión del método.
-
-### Fase 9 — Publicación
-
-- Configurar alojamiento.
-- Configurar base de datos administrada.
-- Programar sincronizaciones.
-- Crear copias de seguridad.
-- Incorporar monitoreo.
-- Revisar seguridad y términos de uso.
-
-## 14. Reglas importantes
-
-- Todos los números se guardarán como texto de dos dígitos: `00` a `99`.
-- La semana de análisis será de lunes a sábado.
-- La zona horaria oficial del sistema será `America/Santo_Domingo`.
-- Una predicción guardará explícitamente la fecha máxima de datos utilizados.
-- Resultados posteriores no modificarán una predicción anterior.
-- Los pesos del algoritmo tendrán versiones.
-- La limpieza del frontend nunca eliminará datos persistentes.
-- Las estadísticas se mostrarán como tendencias, no como certezas.
-
-## 15. Criterios de aceptación
-
-La primera versión se considerará funcional cuando:
-
-- Importe resultados desde 2023 sin duplicados.
-- Identifique correctamente las tres loterías.
-- Actualice resultados automáticamente.
-- Calcule semanas equivalentes correctamente.
-- Obtenga los 15 números calientes del mes.
-- Genere candidatos separados por lotería.
-- Explique el puntaje de cada candidato.
-- Guarde predicciones con fecha, hora y versión.
-- El botón de limpiar solo modifique la pantalla.
-- Funcione en computadora y teléfono.
-- Permita medir el rendimiento histórico del método.
-
-## 16. Alcance inicial
-
-Incluido:
-
-- Una aplicación web.
-- Tres loterías fijas.
-- Importación histórica.
-- Actualización incremental.
-- Estadísticas mensuales y semanales.
-- Generación manual mediante botón.
-- Limpieza visual.
-- Historial y medición de predicciones.
-
-Fuera del alcance inicial:
-
-- Apuestas o pagos.
-- Automatización de jugadas.
-- Garantías de resultados.
-- Reconocimiento de voz.
-- Aplicaciones móviles nativas.
-- Inteligencia artificial o aprendizaje automático avanzado.
-- Incorporación de loterías adicionales.
-
-## 17. Próximas decisiones
-
-Antes de comenzar la implementación se deben cerrar:
-
-1. Identificadores externos definitivos de las tres loterías.
-2. Cantidad exacta de candidatos principales que se mostrarán.
-3. Pesos iniciales del modelo de puntuación.
-4. Proveedor de PostgreSQL y alojamiento.
-5. Horarios definitivos de sincronización.
-6. Diseño visual inicial.
-
+El objetivo de esta versión es establecer primero un experimento estadístico reproducible. Si el método no supera sus baselines fuera de muestra, el resultado correcto del proyecto será reconocer que las recurrencias estudiadas no mostraron poder predictivo suficiente bajo este protocolo.
