@@ -108,6 +108,44 @@ export const predictionCandidates = sqliteTable(
   ],
 );
 
+export const predictionEvaluations = sqliteTable(
+  "prediction_evaluations",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    predictionId: integer("prediction_id").notNull().references(() => predictions.id),
+    lotteryId: integer("lottery_id").notNull().references(() => lotteries.id),
+    drawResultId: integer("draw_result_id").references(() => drawResults.id),
+    targetDate: text("target_date").notNull(),
+    weekday: integer("weekday").notNull(),
+    status: text("status").notNull().default("pending"),
+    dailyCandidatesSnapshot: text("daily_candidates_snapshot").notNull().default("[]"),
+    weeklyTop5Snapshot: text("weekly_top5_snapshot").notNull().default("[]"),
+    weeklyTop10Snapshot: text("weekly_top10_snapshot").notNull().default("[]"),
+    weeklyTop15Snapshot: text("weekly_top15_snapshot").notNull().default("[]"),
+    resultNumbers: text("result_numbers").notNull().default("[]"),
+    dailyMatchedPositions: text("daily_matched_positions").notNull().default("[]"),
+    dailyMatchCount: integer("daily_match_count").notNull().default(0),
+    top5MatchedPositions: text("top5_matched_positions").notNull().default("[]"),
+    top10MatchedPositions: text("top10_matched_positions").notNull().default("[]"),
+    top15MatchedPositions: text("top15_matched_positions").notNull().default("[]"),
+    hitTop5: integer("hit_top5", { mode: "boolean" }).notNull().default(false),
+    hitTop10: integer("hit_top10", { mode: "boolean" }).notNull().default(false),
+    hitTop15: integer("hit_top15", { mode: "boolean" }).notNull().default(false),
+    positionEvaluation: text("position_evaluation").notNull().default("not_applicable_stat_v1"),
+    reviewNote: text("review_note"),
+    evaluatedAt: text("evaluated_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("prediction_evaluations_prediction_date_unique").on(
+      table.predictionId,
+      table.targetDate,
+    ),
+    index("prediction_evaluations_date_status_idx").on(table.targetDate, table.status),
+  ],
+);
+
 export const syncRuns = sqliteTable(
   "sync_runs",
   {
