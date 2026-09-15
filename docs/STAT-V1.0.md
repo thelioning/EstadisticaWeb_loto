@@ -121,6 +121,70 @@ El orden diario aplica la misma lógica determinista sobre ese subconjunto.
 
 Ambos salen del mismo ranking STAT-V1.0. No son modelos diferentes.
 
+## Protocolo de backtesting
+
+Para evaluar un año ISO objetivo `Y`, cada semana `W` se reconstruye sin usar
+resultados de `Y` en el ranking:
+
+```text
+entrenamiento(W,Y) = W(Y-3) ∪ W(Y-2) ∪ W(Y-1)
+evaluación(W,Y)    = W(Y)
+```
+
+La unidad evaluada es un sorteo real de una lotería en una fecha. Una semana
+solamente entra al backtest cuando cada año histórico contiene sus siete
+sorteos esperados para esa lotería. Las semanas omitidas se cuentan y se
+muestran; no se completan con fechas cercanas ni con valores simulados.
+
+Para cada corte `k ∈ {5,10,15}` se calcula:
+
+```text
+Hit@k = sorteos con al menos un número real en el Top k / sorteos evaluados
+```
+
+Los tres cortes están anidados. No deben sumarse entre sí.
+
+## Baselines
+
+### Selección aleatoria
+
+El baseline principal selecciona `k` números distintos uniformemente y sin
+reemplazo del universo `00`–`99`. Si un sorteo contiene `d` números reales
+distintos, la probabilidad exacta de al menos una coincidencia es:
+
+```text
+p_azar(k,d) = 1 - C(100-d,k) / C(100,k)
+```
+
+La expectativa acumulada es la suma de `p_azar` sobre todos los sorteos. No se
+usa una simulación Monte Carlo, por lo que el resultado no depende de una
+semilla aleatoria.
+
+### Frecuencia histórica simple
+
+Como segundo baseline, los números se ordenan solamente por `F(n)` descendente
+y por número ascendente en caso de empate. Permite medir si los desempates de
+STAT-V1.0 añaden rendimiento sobre el conteo bruto.
+
+## Incertidumbre y criterio de lectura
+
+El laboratorio informa el intervalo de Wilson al 95 % para `Hit@k` y un valor
+`p` unilateral calculado con la distribución Poisson-binomial, porque la
+probabilidad aleatoria puede variar si un sorteo repite números.
+
+Una ventaja se etiqueta únicamente como retrospectiva cuando:
+
+```text
+n ≥ 30
+p < 0.05 / 3
+límite inferior del IC 95 % > baseline aleatorio
+```
+
+La división por tres corrige la comparación simultánea de Hit@5, Hit@10 y
+Hit@15. Superar este criterio en el backtest no demuestra capacidad predictiva
+prospectiva: el resultado debe confirmarse en datos posteriores no utilizados
+para escoger ni modificar el método.
+
 ## Parejas recurrentes
 
 Las parejas que aparecen juntas en un mismo sorteo se mantienen como información exploratoria. En STAT-V1.0 tienen peso cero y no modifican el ranking.

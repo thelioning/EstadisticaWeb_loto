@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type CSSProperties } from "react";
+import BacktestLab from "./components/BacktestLab";
 
 type PairSignal = {
   pair: string;
@@ -591,7 +592,7 @@ export default function Home() {
         </a>
         <div className="statusPill">
           <span className="statusDot" />
-          Motor estadístico disponible
+          Sin predicciones automáticas
         </div>
       </header>
 
@@ -599,11 +600,11 @@ export default function Home() {
         <div className="heroGlow heroGlowOne" />
         <div className="heroGlow heroGlowTwo" />
         <div className="heroContent">
-          <div className="eyebrow">ANÁLISIS HISTÓRICO · REPÚBLICA DOMINICANA</div>
-          <h1>Decisiones con datos.<br /><span>Predicciones con contexto.</span></h1>
+          <div className="eyebrow">LABORATORIO ESTADÍSTICO · REPÚBLICA DOMINICANA</div>
+          <h1>Patrones históricos.<br /><span>Evidencia medible.</span></h1>
           <p className="heroCopy">
-            Compara la misma semana ISO de los tres años anteriores, de lunes a
-            domingo, para observar recurrencias históricas y generar candidatos.
+            Examina recurrencias de la misma semana ISO, genera candidatos solamente
+            cuando lo solicites y comprueba su rendimiento frente al azar.
           </p>
           <div className="heroActions">
             <button className="primaryButton" onClick={() => void generatePredictions(selectedDate)} disabled={loading}>
@@ -615,7 +616,7 @@ export default function Home() {
             </button>
           </div>
           <p className="finePrint">
-            Análisis estadístico orientativo. No garantiza premios; el uso de la información es decisión del usuario.
+            La pantalla abre sin generar candidatos. Ningún resultado se presenta como garantía de premio.
           </p>
         </div>
 
@@ -676,13 +677,13 @@ export default function Home() {
         </form>
 
         {!result && !loading && !error && (
-          <div className="emptyState">
+            <div className="emptyState">
             <div className="orbit">
               <span>03</span><span>51</span><span>87</span>
               <div className="orbitCenter">✦</div>
             </div>
-            <h3>Tu lectura semanal comienza aquí</h3>
-            <p>Genera el análisis para comparar la misma semana ISO de los tres años históricos.</p>
+            <h3>El análisis está en espera</h3>
+            <p>Selecciona una fecha y genera el análisis cuando quieras comparar las semanas históricas.</p>
           </div>
         )}
 
@@ -1127,6 +1128,7 @@ export default function Home() {
           </>
         )}
       </section>
+      <BacktestLab />
     </main>
   );
 }

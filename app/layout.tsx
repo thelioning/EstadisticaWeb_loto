@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nexo Loto | Análisis estadístico semanal",
+  title: "Nexo Loto | Laboratorio estadístico",
   description:
-    "Análisis histórico de quinielas dominicanas por mes, semana y posición.",
+    "Laboratorio para medir recurrencias históricas de quinielas y compararlas con baselines de azar.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
