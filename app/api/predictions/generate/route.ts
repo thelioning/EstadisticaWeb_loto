@@ -42,6 +42,7 @@ const LOTTERY_META: Record<string, { shortName: string; accent: string }> = {
   leidsa: { shortName: "LEIDSA", accent: "#0b6a4f" },
   loteka: { shortName: "LOTEKA", accent: "#9a4e20" },
 };
+const CANDIDATE_BATCH_SIZE = 4;
 
 type Draw = StatDraw & {
   year: number;
@@ -95,6 +96,23 @@ type SnapshotParameters = {
   dailyLimit: number;
   historicalDraws: Draw[];
 };
+
+function chunkRows<T>(rows: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < rows.length; index += size) {
+    chunks.push(rows.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function publicGenerationError(error: unknown) {
+  const fallback = "No fue posible calcular o congelar las estadísticas reales.";
+  if (!(error instanceof Error)) return fallback;
+  if (/Failed query:|D1_ERROR|SQLITE_/i.test(error.message)) {
+    return "No fue posible guardar la proyección. Intenta nuevamente; si el fallo continúa, revisa el registro técnico.";
+  }
+  return error.message || fallback;
+}
 
 function formatShortDate(date: Date) {
   return `${String(date.getUTCDate()).padStart(2, "0")} ${MONTHS[date.getUTCMonth()]}`;
@@ -670,8 +688,8 @@ export async function POST(request: NextRequest) {
             }),
           ];
 
-          if (candidateRows.length > 0) {
-            await db.insert(predictionCandidates).values(candidateRows);
+          for (const batch of chunkRows(candidateRows, CANDIDATE_BATCH_SIZE)) {
+            await db.insert(predictionCandidates).values(batch);
           }
         }
       } catch (error) {
@@ -734,12 +752,10 @@ export async function POST(request: NextRequest) {
       lotteries: analyses.map((analysis) => analysis.payload),
     });
   } catch (error) {
+    console.error("Prediction generation failed", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "No fue posible calcular o congelar las estadísticas reales.",
+        error: publicGenerationError(error),
       },
       { status: 500 },
     );

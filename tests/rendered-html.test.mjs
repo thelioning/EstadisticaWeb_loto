@@ -47,3 +47,16 @@ test("production metadata identifies the statistical laboratory", async () => {
     /\.backtestLab/,
   );
 });
+
+test("candidate snapshots are inserted below the D1 parameter limit", async () => {
+  const [generateRoute, freezeRoute] = await Promise.all([
+    readFile(new URL("../app/api/predictions/generate/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/predictions/freeze/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  for (const route of [generateRoute, freezeRoute]) {
+    assert.match(route, /CANDIDATE_BATCH_SIZE = 4/);
+    assert.match(route, /chunkRows\(candidateRows, CANDIDATE_BATCH_SIZE\)/);
+    assert.doesNotMatch(route, /\.values\(candidateRows\)/);
+  }
+});
